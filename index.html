@@ -42,102 +42,166 @@
     <!-- Chart.js for Nutrition Visuals -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Firebase SDK (Realtime Cloud Persistence Across ALL Devices) -->
+    <!-- Firebase: Cloud Database + Admin Authentication -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        
-        // Retrieve custom saved Firebase config for GitHub Pages if exists
-        const savedFirebaseConfig = localStorage.getItem('sppg_custom_firebase_config');
-        let parsedCustomConfig = null;
-        if (savedFirebaseConfig) {
-            try { parsedCustomConfig = JSON.parse(savedFirebaseConfig); } catch(e){}
+        /*
+         * ================================================================
+         * FIREBASE CONFIGURATION
+         * ================================================================
+         * 1. Firebase Console -> Project settings -> Your apps -> Web app.
+         * 2. Copy the firebaseConfig values below.
+         * 3. Create an Authentication Email/Password admin account.
+         * 4. Put the EXACT admin email in ADMIN_EMAIL.
+         * 5. Deploy this file to GitHub Pages.
+         *
+         * Firebase web config is NOT a password. Database security is
+         * enforced by Firestore Security Rules, not by hiding this config.
+         */
+        const FIREBASE_CONFIG = {
+            apiKey: "GANTI_DENGAN_API_KEY_FIREBASE",
+            authDomain: "GANTI_DENGAN_PROJECT_ID.firebaseapp.com",
+            projectId: "GANTI_DENGAN_PROJECT_ID",
+            storageBucket: "GANTI_DENGAN_PROJECT_ID.firebasestorage.app",
+            messagingSenderId: "GANTI_DENGAN_MESSAGING_SENDER_ID",
+            appId: "GANTI_DENGAN_APP_ID"
+        };
+
+        // HANYA akun email ini yang diperlakukan sebagai admin oleh UI.
+        const ADMIN_EMAIL = "GANTI_DENGAN_EMAIL_ADMIN";
+
+        const APP_ID = "sppg-bukit-kemuning-4";
+        const MENU_DOC = "artifacts/" + APP_ID + "/public/data/mbg_menu/current";
+
+        let firebaseApp = null;
+        let auth = null;
+        let db = null;
+        let unsubscribeMenu = null;
+
+        window.isCloudConnected = false;
+        window.isAdminAuthenticated = false;
+
+        function validFirebaseConfig() {
+            return FIREBASE_CONFIG.apiKey &&
+                   !FIREBASE_CONFIG.apiKey.startsWith("GANTI_") &&
+                   FIREBASE_CONFIG.projectId &&
+                   !FIREBASE_CONFIG.projectId.startsWith("GANTI_") &&
+                   ADMIN_EMAIL &&
+                   !ADMIN_EMAIL.startsWith("GANTI_");
         }
 
-        // Global Firebase configuration fallback
-        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) 
-            ? JSON.parse(__firebase_config) 
-            : (parsedCustomConfig || {
-                apiKey: "demo-key",
-                authDomain: "sppg-mbg.firebaseapp.com",
-                projectId: "sppg-mbg",
-                storageBucket: "sppg-mbg.appspot.com",
-                messagingSenderId: "123456789",
-                appId: "1:123456789:web:abcdef"
-            });
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sppg-bukit-kemuning-4';
-
-        let app, auth, db;
-        window.isCloudConnected = false;
+        function updateCloudBadgeStatus(isConnected) {
+            const badge = document.getElementById('cloud-status-badge');
+            if (!badge) return;
+            if (isConnected) {
+                badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1"></span><i data-lucide="cloud-check" class="w-3.5 h-3.5"></i><span>Cloud Realtime Aktif</span>`;
+            } else {
+                badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300";
+                badge.innerHTML = `<i data-lucide="cloud-off" class="w-3.5 h-3.5"></i><span>Cloud Belum Terhubung</span>`;
+            }
+            if (window.lucide) lucide.createIcons();
+        }
 
         async function initCloudDatabase() {
+            if (!validFirebaseConfig()) {
+                console.warn("Firebase belum dikonfigurasi. Isi FIREBASE_CONFIG dan ADMIN_EMAIL di index.html.");
+                updateCloudBadgeStatus(false);
+                return;
+            }
+
             try {
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
+                firebaseApp = initializeApp(FIREBASE_CONFIG);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                window.firebaseAuth = auth;
+                window.firebaseDb = db;
 
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'mbg_menu', 'current');
 
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'mbg_menu', 'current');
-                
-                onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const cloudData = docSnap.data();
-                        if (cloudData && cloudData.date !== undefined) {
-                            window.appData = { ...window.appData, ...cloudData };
-                            localStorage.setItem('sppg_mbg_app_data', JSON.stringify(window.appData));
-                            window.isCloudConnected = true;
-                            updateCloudBadgeStatus(true);
-
-                            if (typeof window.renderAllViews === 'function') window.renderAllViews();
-                            if (typeof window.updateChartData === 'function') window.updateChartData();
-                            if (typeof window.syncAdminInputs === 'function') window.syncAdminInputs();
-                        }
+                // PUBLIC READ: semua pengunjung dapat melihat data terbaru.
+                unsubscribeMenu = onSnapshot(docRef, (snap) => {
+                    if (snap.exists()) {
+                        const cloudData = snap.data();
+                        window.appData = {
+                            ...window.appData,
+                            ...cloudData,
+                            pb: { ...(window.appData?.pb || {}), ...(cloudData.pb || {}) },
+                            pk: { ...(window.appData?.pk || {}), ...(cloudData.pk || {}) }
+                        };
+                        localStorage.setItem('sppg_mbg_app_data', JSON.stringify(window.appData));
                     }
+                    window.isCloudConnected = true;
+                    updateCloudBadgeStatus(true);
+                    if (typeof window.renderAllViews === 'function') window.renderAllViews();
+                    if (typeof window.updateChartData === 'function') window.updateChartData();
+                    if (typeof window.syncAdminInputs === 'function' && window.isAdminAuthenticated) window.syncAdminInputs();
                 }, (error) => {
-                    console.warn("Firestore sync status:", error.message);
+                    console.error("Firestore listener error:", error);
                     window.isCloudConnected = false;
                     updateCloudBadgeStatus(false);
                 });
+
+                onAuthStateChanged(auth, (user) => {
+                    const isAdmin = !!user &&
+                                    !!user.email &&
+                                    user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+                    window.isAdminAuthenticated = isAdmin;
+                    window.firebaseUser = user || null;
+
+                    if (typeof window.setAdminUI === 'function') {
+                        window.setAdminUI(isAdmin);
+                    }
+                });
             } catch (e) {
-                console.warn("Firebase fallback to local memory state:", e);
+                console.error("Firebase initialization error:", e);
                 window.isCloudConnected = false;
                 updateCloudBadgeStatus(false);
             }
         }
 
-        window.saveToCloud = async function(dataToSave) {
-            if (!db || !auth.currentUser) return false;
+        window.loginAdminFirebase = async function(email, password) {
+            if (!auth) return { success:false, message:"Firebase belum dikonfigurasi." };
+            if (email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+                return { success:false, message:"Email tersebut bukan akun admin." };
+            }
             try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'mbg_menu', 'current');
-                await setDoc(docRef, { ...dataToSave, updatedAt: new Date().toISOString() });
+                await signInWithEmailAndPassword(auth, email.trim(), password);
+                return { success:true };
+            } catch (error) {
+                console.error("Firebase Auth:", error);
+                let message = "Email atau password salah.";
+                if (error.code === 'auth/too-many-requests') message = "Terlalu banyak percobaan. Coba lagi beberapa saat.";
+                if (error.code === 'auth/invalid-credential') message = "Email atau password salah.";
+                return { success:false, message };
+            }
+        };
+
+        window.logoutAdminFirebase = async function() {
+            if (auth) await signOut(auth);
+        };
+
+        window.saveToCloud = async function(dataToSave) {
+            if (!db || !auth || !auth.currentUser) return false;
+            if (!window.isAdminAuthenticated) return false;
+            if (auth.currentUser.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return false;
+
+            try {
+                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'mbg_menu', 'current');
+                await setDoc(docRef, {
+                    ...dataToSave,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: auth.currentUser.email
+                });
                 return true;
             } catch (err) {
                 console.error("Cloud Save Error:", err);
                 return false;
             }
         };
-
-        function updateCloudBadgeStatus(isConnected) {
-            const badge = document.getElementById('cloud-status-badge');
-            if (badge) {
-                if (isConnected) {
-                    badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300";
-                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1"></span><i data-lucide="cloud-check" class="w-3.5 h-3.5"></i><span>Cloud Realtime Aktif</span>`;
-                } else {
-                    badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300";
-                    badge.innerHTML = `<i data-lucide="cloud-off" class="w-3.5 h-3.5"></i><span>Mode Simpan Lokal</span>`;
-                }
-                if (window.lucide) lucide.createIcons();
-            }
-        }
 
         initCloudDatabase();
     </script>
@@ -268,6 +332,11 @@
                     </button>
                 </div>
 
+                <button id="admin-logout-button" onclick="lockAdmin()" class="hidden items-center space-x-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-bold hover:bg-red-100 transition-all">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                    <span>Keluar</span>
+                </button>
+
             </div>
         </div>
     </header>
@@ -280,12 +349,17 @@
                     <i data-lucide="shield-check" class="w-8 h-8"></i>
                 </div>
                 <h3 class="text-xl font-black text-slate-900">Akses Panel Admin SPPG</h3>
-                <p class="text-xs text-slate-500">Masukkan kata sandi khusus untuk mengelola foto & menu MBG</p>
+                <p class="text-xs text-slate-500">Masuk menggunakan akun admin Firebase untuk mengelola foto & menu MBG</p>
             </div>
 
             <form onsubmit="handleAdminAuth(event)" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Kata Sandi Admin</label>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Email Admin</label>
+                    <input type="email" id="admin-email-input"
+                           placeholder="email admin..."
+                           autocomplete="username"
+                           class="w-full p-3.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all mb-3">
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Password</label>
                     <div class="relative">
                         <input type="password" id="admin-password-input" 
                                placeholder="Masukkan password..." 
@@ -296,7 +370,7 @@
                     </div>
                     <p id="admin-auth-error" class="text-xs text-red-600 font-semibold mt-1.5 hidden flex items-center space-x-1">
                         <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                        <span>Kata sandi salah! Gunakan: SPPGBK4</span>
+                        <span id="admin-auth-error-text">Email atau password salah.</span>
                     </p>
                 </div>
 
@@ -957,9 +1031,7 @@ Energi : 573.11 kkal..."
     </footer>
 
     <script>
-        // ================= STATE MANAGEMENT & LOCAL STORAGE PERSISTENCE =================
-        let isAdminAuthenticated = false;
-
+        // ================= STATE MANAGEMENT =================
         const defaultState = {
             date: "",
             menuPB: "",
@@ -976,12 +1048,14 @@ Energi : 573.11 kkal..."
                 const saved = localStorage.getItem('sppg_mbg_app_data');
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    return { ...defaultState, ...parsed };
+                    return {
+                        ...defaultState, ...parsed,
+                        pb: { ...defaultState.pb, ...(parsed.pb || {}) },
+                        pk: { ...defaultState.pk, ...(parsed.pk || {}) }
+                    };
                 }
-            } catch (e) {
-                console.warn("Failed loading from localStorage:", e);
-            }
-            return { ...defaultState };
+            } catch (e) { console.warn("Gagal membaca local cache:", e); }
+            return { ...defaultState, pb:{...defaultState.pb}, pk:{...defaultState.pk} };
         }
 
         let appData = loadSavedLocalState();
@@ -993,15 +1067,16 @@ Energi : 573.11 kkal..."
                 localStorage.setItem('sppg_mbg_app_data', JSON.stringify(appData));
                 return true;
             } catch (e) {
-                console.error("Could not save to localStorage:", e);
+                console.error("Could not save local cache:", e);
                 return false;
             }
         }
 
         function switchMode(mode) {
-            if (mode === 'admin' && !isAdminAuthenticated) {
+            if (mode === 'admin' && !window.isAdminAuthenticated) {
                 const modal = document.getElementById('admin-auth-modal');
                 if (modal) modal.classList.remove('hidden');
+                setTimeout(() => document.getElementById('admin-email-input')?.focus(), 50);
                 return;
             }
 
@@ -1013,37 +1088,48 @@ Energi : 573.11 kkal..."
             if (mode === 'preview') {
                 if (previewSection) previewSection.classList.remove('hidden');
                 if (adminSection) adminSection.classList.add('hidden');
-                if (tabPreview) {
-                    tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
-                }
-                if (tabAdmin) {
-                    tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
-                }
-            } else if (mode === 'admin') {
+                if (tabPreview) tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
+                if (tabAdmin) tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
+            } else if (mode === 'admin' && window.isAdminAuthenticated) {
                 if (previewSection) previewSection.classList.add('hidden');
                 if (adminSection) adminSection.classList.remove('hidden');
-                if (tabAdmin) {
-                    tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
-                }
-                if (tabPreview) {
-                    tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
-                }
+                if (tabAdmin) tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
+                if (tabPreview) tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
                 syncAdminInputs();
             }
         }
 
-        function handleAdminAuth(e) {
-            e.preventDefault();
-            const input = document.getElementById('admin-password-input').value;
-            const errorMsg = document.getElementById('admin-auth-error');
-            if (input === 'SPPGBK4') {
-                isAdminAuthenticated = true;
-                if (errorMsg) errorMsg.classList.add('hidden');
+        window.setAdminUI = function(isAdmin) {
+            window.isAdminAuthenticated = !!isAdmin;
+            if (isAdmin) {
                 closeAdminAuthModal();
-                switchMode('admin');
-                document.getElementById('admin-password-input').value = '';
-                showToast("Berhasil Masuk Panel Admin SPPG!");
+                const logoutBtn = document.getElementById('admin-logout-button');
+                if (logoutBtn) logoutBtn.classList.remove('hidden');
             } else {
+                const adminSection = document.getElementById('mode-admin');
+                if (adminSection) adminSection.classList.add('hidden');
+                const logoutBtn = document.getElementById('admin-logout-button');
+                if (logoutBtn) logoutBtn.classList.add('hidden');
+                const previewSection = document.getElementById('mode-preview');
+                if (previewSection) previewSection.classList.remove('hidden');
+            }
+        };
+
+        async function handleAdminAuth(e) {
+            e.preventDefault();
+            const email = document.getElementById('admin-email-input')?.value || '';
+            const password = document.getElementById('admin-password-input')?.value || '';
+            const errorMsg = document.getElementById('admin-auth-error');
+            const errorText = document.getElementById('admin-auth-error-text');
+            const result = await window.loginAdminFirebase(email, password);
+
+            if (result.success) {
+                if (errorMsg) errorMsg.classList.add('hidden');
+                document.getElementById('admin-password-input').value = '';
+                showToast("Berhasil masuk Panel Admin SPPG!");
+                setTimeout(() => switchMode('admin'), 100);
+            } else {
+                if (errorText) errorText.textContent = result.message || 'Email atau password salah.';
                 if (errorMsg) errorMsg.classList.remove('hidden');
             }
         }
@@ -1061,10 +1147,11 @@ Energi : 573.11 kkal..."
             pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
         }
 
-        function lockAdmin() {
-            isAdminAuthenticated = false;
+        async function lockAdmin() {
+            try { await window.logoutAdminFirebase(); } catch(e) { console.error(e); }
+            window.isAdminAuthenticated = false;
             switchMode('preview');
-            showToast("Sesi Admin Telah Dikunci");
+            showToast("Sesi Admin telah dikunci");
         }
 
         window.syncAdminInputs = function() {
@@ -1152,7 +1239,7 @@ Energi : 573.11 kkal..."
             document.getElementById(`${targetKey}-vitamin`).value = appData[targetKey].vitamin || '';
         }
 
-        function saveAndApplyData() {
+        async function saveAndApplyData() {
             appData.date = document.getElementById('input-date').value.trim();
             appData.menuPB = document.getElementById('input-menu-pb').value.trim();
             appData.menuPK = document.getElementById('input-menu-pk').value.trim();
@@ -1175,20 +1262,22 @@ Energi : 573.11 kkal..."
                 vitamin: parseFloat(document.getElementById('pk-vitamin').value) || 0
             };
 
+            if (!window.isAdminAuthenticated) {
+                showToast("Silakan masuk sebagai Admin terlebih dahulu.");
+                return;
+            }
+
             saveLocalState();
             renderAllViews();
             updateChartData();
 
             if (typeof window.saveToCloud === 'function') {
-                window.saveToCloud(appData).then((success) => {
-                    if (success) {
-                        showToast("Tersimpan di Cloud Database & Tampil di Semua Device!");
-                    } else {
-                        showToast("Tersimpan di Browser LocalStorage!");
-                    }
-                });
-            } else {
-                showToast("Tersimpan di Browser LocalStorage!");
+                const success = await window.saveToCloud(appData);
+                if (success) {
+                    showToast("Berhasil disimpan ke Cloud & tampil di semua perangkat!");
+                } else {
+                    showToast("Gagal menyimpan ke Cloud. Periksa koneksi/Firebase.");
+                }
             }
         }
 
@@ -1217,7 +1306,8 @@ Energi : 573.11 kkal..."
             showToast("Kode defaultState disalin ke Clipboard!");
         }
 
-        function importDataJSON(event) {
+        async function importDataJSON(event) {
+            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
             const file = event.target.files[0];
             if (!file) return;
 
@@ -1231,7 +1321,7 @@ Energi : 573.11 kkal..."
                     syncAdminInputs();
                     renderAllViews();
                     updateChartData();
-                    if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
+                    if (typeof window.saveToCloud === 'function') await window.saveToCloud(appData);
                     showToast("Data Berhasil Diimpor!");
                 } catch (err) {
                     alert("Format file JSON tidak valid!");
@@ -1374,6 +1464,7 @@ Energi : 573.11 kkal..."
         }
 
         function addPhotoFromURL() {
+            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
             const urlInput = document.getElementById('input-photo-url');
             const url = urlInput.value.trim();
             if (!url) return;
@@ -1443,6 +1534,7 @@ Energi : 573.11 kkal..."
         }
 
         async function handleFileUpload(event) {
+            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
             const files = event.target ? event.target.files : event;
             if (!files || !files.length) return;
 
@@ -1467,7 +1559,8 @@ Energi : 573.11 kkal..."
             showToast("Foto Berhasil Disimpan!");
         }
 
-        function removePhoto(index) {
+        async function removePhoto(index) {
+            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
             appData.photos.splice(index, 1);
             if (appData.activePhotoIndex >= appData.photos.length) {
                 appData.activePhotoIndex = Math.max(0, appData.photos.length - 1);
@@ -1618,7 +1711,8 @@ Energi : 573.11 kkal..."
             nutritionChart.update();
         }
 
-        function resetToDefaultData() {
+        async function resetToDefaultData() {
+            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
             if (!confirm("Apakah Anda yakin ingin mengosongkan semua data?")) return;
             appData = {
                 date: "",
@@ -1634,7 +1728,7 @@ Energi : 573.11 kkal..."
             syncAdminInputs();
             renderAllViews();
             updateChartData();
-            if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
+            if (typeof window.saveToCloud === 'function') await window.saveToCloud(appData);
             showToast("Semua Input Berhasil Dikosongkan!");
         }
 
