@@ -42,166 +42,101 @@
     <!-- Chart.js for Nutrition Visuals -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Firebase: Cloud Database + Admin Authentication -->
+    <!-- Firebase SDK (Realtime Cloud Persistence Across ALL Devices) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        /*
-         * ================================================================
-         * FIREBASE CONFIGURATION
-         * ================================================================
-         * 1. Firebase Console -> Project settings -> Your apps -> Web app.
-         * 2. Copy the firebaseConfig values below.
-         * 3. Create an Authentication Email/Password admin account.
-         * 4. Put the EXACT admin email in ADMIN_EMAIL.
-         * 5. Deploy this file to GitHub Pages.
-         *
-         * Firebase web config is NOT a password. Database security is
-         * enforced by Firestore Security Rules, not by hiding this config.
-         */
-        const FIREBASE_CONFIG = {
-            apiKey: "GANTI_DENGAN_API_KEY_FIREBASE",
-            authDomain: "GANTI_DENGAN_PROJECT_ID.firebaseapp.com",
-            projectId: "GANTI_DENGAN_PROJECT_ID",
-            storageBucket: "GANTI_DENGAN_PROJECT_ID.firebasestorage.app",
-            messagingSenderId: "GANTI_DENGAN_MESSAGING_SENDER_ID",
-            appId: "GANTI_DENGAN_APP_ID"
-        };
+        // Retrieve custom saved Firebase config for GitHub Pages if exists
+        const savedFirebaseConfig = localStorage.getItem('sppg_custom_firebase_config');
+        let parsedCustomConfig = null;
+        if (savedFirebaseConfig) {
+            try { parsedCustomConfig = JSON.parse(savedFirebaseConfig); } catch(e){}
+        }
 
-        // HANYA akun email ini yang diperlakukan sebagai admin oleh UI.
-        const ADMIN_EMAIL = "GANTI_DENGAN_EMAIL_ADMIN";
+        // Global Firebase configuration fallback
+        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) 
+            ? JSON.parse(__firebase_config) 
+            : (parsedCustomConfig || {
+                apiKey: "demo-key",
+                authDomain: "sppg-mbg.firebaseapp.com",
+                projectId: "sppg-mbg",
+                storageBucket: "sppg-mbg.appspot.com",
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abcdef"
+            });
 
-        const APP_ID = "sppg-bukit-kemuning-4";
-        const MENU_DOC = "artifacts/" + APP_ID + "/public/data/mbg_menu/current";
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sppg-bukit-kemuning-4';
 
-        let firebaseApp = null;
-        let auth = null;
-        let db = null;
-        let unsubscribeMenu = null;
-
+        let app, auth, db;
         window.isCloudConnected = false;
-        window.isAdminAuthenticated = false;
-
-        function validFirebaseConfig() {
-            return FIREBASE_CONFIG.apiKey &&
-                   !FIREBASE_CONFIG.apiKey.startsWith("GANTI_") &&
-                   FIREBASE_CONFIG.projectId &&
-                   !FIREBASE_CONFIG.projectId.startsWith("GANTI_") &&
-                   ADMIN_EMAIL &&
-                   !ADMIN_EMAIL.startsWith("GANTI_");
-        }
-
-        function updateCloudBadgeStatus(isConnected) {
-            const badge = document.getElementById('cloud-status-badge');
-            if (!badge) return;
-            if (isConnected) {
-                badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300";
-                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1"></span><i data-lucide="cloud-check" class="w-3.5 h-3.5"></i><span>Cloud Realtime Aktif</span>`;
-            } else {
-                badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300";
-                badge.innerHTML = `<i data-lucide="cloud-off" class="w-3.5 h-3.5"></i><span>Cloud Belum Terhubung</span>`;
-            }
-            if (window.lucide) lucide.createIcons();
-        }
 
         async function initCloudDatabase() {
-            if (!validFirebaseConfig()) {
-                console.warn("Firebase belum dikonfigurasi. Isi FIREBASE_CONFIG dan ADMIN_EMAIL di index.html.");
-                updateCloudBadgeStatus(false);
-                return;
-            }
-
             try {
-                firebaseApp = initializeApp(FIREBASE_CONFIG);
-                auth = getAuth(firebaseApp);
-                db = getFirestore(firebaseApp);
-                window.firebaseAuth = auth;
-                window.firebaseDb = db;
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
 
-                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'mbg_menu', 'current');
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
 
-                // PUBLIC READ: semua pengunjung dapat melihat data terbaru.
-                unsubscribeMenu = onSnapshot(docRef, (snap) => {
-                    if (snap.exists()) {
-                        const cloudData = snap.data();
-                        window.appData = {
-                            ...window.appData,
-                            ...cloudData,
-                            pb: { ...(window.appData?.pb || {}), ...(cloudData.pb || {}) },
-                            pk: { ...(window.appData?.pk || {}), ...(cloudData.pk || {}) }
-                        };
-                        localStorage.setItem('sppg_mbg_app_data', JSON.stringify(window.appData));
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'mbg_menu', 'current');
+                
+                onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const cloudData = docSnap.data();
+                        if (cloudData && cloudData.date !== undefined) {
+                            window.appData = { ...window.appData, ...cloudData };
+                            localStorage.setItem('sppg_mbg_app_data', JSON.stringify(window.appData));
+                            window.isCloudConnected = true;
+                            updateCloudBadgeStatus(true);
+
+                            if (typeof window.renderAllViews === 'function') window.renderAllViews();
+                            if (typeof window.updateChartData === 'function') window.updateChartData();
+                            if (typeof window.syncAdminInputs === 'function') window.syncAdminInputs();
+                        }
                     }
-                    window.isCloudConnected = true;
-                    updateCloudBadgeStatus(true);
-                    if (typeof window.renderAllViews === 'function') window.renderAllViews();
-                    if (typeof window.updateChartData === 'function') window.updateChartData();
-                    if (typeof window.syncAdminInputs === 'function' && window.isAdminAuthenticated) window.syncAdminInputs();
                 }, (error) => {
-                    console.error("Firestore listener error:", error);
+                    console.warn("Firestore sync status:", error.message);
                     window.isCloudConnected = false;
                     updateCloudBadgeStatus(false);
                 });
-
-                onAuthStateChanged(auth, (user) => {
-                    const isAdmin = !!user &&
-                                    !!user.email &&
-                                    user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-                    window.isAdminAuthenticated = isAdmin;
-                    window.firebaseUser = user || null;
-
-                    if (typeof window.setAdminUI === 'function') {
-                        window.setAdminUI(isAdmin);
-                    }
-                });
             } catch (e) {
-                console.error("Firebase initialization error:", e);
+                console.warn("Firebase fallback to local memory state:", e);
                 window.isCloudConnected = false;
                 updateCloudBadgeStatus(false);
             }
         }
 
-        window.loginAdminFirebase = async function(email, password) {
-            if (!auth) return { success:false, message:"Firebase belum dikonfigurasi." };
-            if (email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-                return { success:false, message:"Email tersebut bukan akun admin." };
-            }
-            try {
-                await signInWithEmailAndPassword(auth, email.trim(), password);
-                return { success:true };
-            } catch (error) {
-                console.error("Firebase Auth:", error);
-                let message = "Email atau password salah.";
-                if (error.code === 'auth/too-many-requests') message = "Terlalu banyak percobaan. Coba lagi beberapa saat.";
-                if (error.code === 'auth/invalid-credential') message = "Email atau password salah.";
-                return { success:false, message };
-            }
-        };
-
-        window.logoutAdminFirebase = async function() {
-            if (auth) await signOut(auth);
-        };
-
         window.saveToCloud = async function(dataToSave) {
-            if (!db || !auth || !auth.currentUser) return false;
-            if (!window.isAdminAuthenticated) return false;
-            if (auth.currentUser.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return false;
-
+            if (!db || !auth.currentUser) return false;
             try {
-                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'mbg_menu', 'current');
-                await setDoc(docRef, {
-                    ...dataToSave,
-                    updatedAt: new Date().toISOString(),
-                    updatedBy: auth.currentUser.email
-                });
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'mbg_menu', 'current');
+                await setDoc(docRef, { ...dataToSave, updatedAt: new Date().toISOString() });
                 return true;
             } catch (err) {
                 console.error("Cloud Save Error:", err);
                 return false;
             }
         };
+
+        function updateCloudBadgeStatus(isConnected) {
+            const badge = document.getElementById('cloud-status-badge');
+            if (badge) {
+                if (isConnected) {
+                    badge.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm";
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1"></span><i data-lucide="cloud-check" class="w-3.5 h-3.5 text-emerald-600"></i><span>Cloud Realtime Aktif</span>`;
+                } else {
+                    badge.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm";
+                    badge.innerHTML = `<i data-lucide="cloud-off" class="w-3.5 h-3.5 text-amber-600"></i><span>Mode Simpan Lokal</span>`;
+                }
+                if (window.lucide) lucide.createIcons();
+            }
+        }
 
         initCloudDatabase();
     </script>
@@ -214,14 +149,14 @@
         }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(226, 232, 240, 0.8);
         }
 
         .gradient-bgn {
-            background: linear-gradient(135deg, #0f2942 0%, #1e3a8a 50%, #059669 100%);
+            background: linear-gradient(135deg, #0f2942 0%, #1e3a8a 55%, #059669 100%);
         }
 
         .custom-scrollbar::-webkit-scrollbar {
@@ -291,13 +226,14 @@
 </head>
 <body class="min-h-screen flex flex-col justify-between selection:bg-bgn-emerald selection:text-white">
 
+    <!-- HEADER NAVIGATION -->
     <header id="main-header" class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 no-print">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-20 transition-all duration-300" id="header-inner">
                 
                 <!-- Logo & Institution Info -->
                 <div class="flex items-center space-x-3 sm:space-x-4">
-                    <div class="relative group">
+                    <div class="relative group cursor-pointer" onclick="switchMode('preview')">
                         <img src="https://www.bgn.go.id/logo-bgn.png" 
                              alt="Logo Badan Gizi Nasional" 
                              class="h-12 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
@@ -306,36 +242,31 @@
                     <div class="h-10 w-[1px] bg-slate-200 hidden sm:block"></div>
                     <div>
                         <div class="flex items-center space-x-2">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 tracking-wide uppercase">
                                 MBG (Makan Bergizi Gratis)
                             </span>
                             <span class="text-xs font-semibold text-slate-500 hidden md:inline">Badan Gizi Nasional</span>
                         </div>
-                        <h1 class="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-tight">
+                        <h1 class="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-tight mt-0.5">
                             SPPG BUKIT KEMUNING 4
                         </h1>
                     </div>
                 </div>
 
                 <!-- Mode Switcher Navigation -->
-                <div class="flex items-center space-x-1 sm:space-x-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                <div class="flex items-center space-x-1 sm:space-x-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 shadow-inner">
                     <button onclick="switchMode('preview')" id="tab-preview" 
-                            class="mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy">
+                            class="mode-tab flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm bg-white text-bgn-navy">
                         <i data-lucide="eye" class="w-4 h-4 text-emerald-600"></i>
                         <span>Mode Preview</span>
                     </button>
 
                     <button onclick="switchMode('admin')" id="tab-admin" 
-                            class="mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all">
+                            class="mode-tab flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition-all">
                         <i data-lucide="lock" class="w-4 h-4 text-amber-600"></i>
                         <span>Mode Admin</span>
                     </button>
                 </div>
-
-                <button id="admin-logout-button" onclick="lockAdmin()" class="hidden items-center space-x-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-bold hover:bg-red-100 transition-all">
-                    <i data-lucide="log-out" class="w-4 h-4"></i>
-                    <span>Keluar</span>
-                </button>
 
             </div>
         </div>
@@ -343,23 +274,18 @@
 
     <!-- ADMIN AUTHENTICATION MODAL -->
     <div id="admin-auth-modal" class="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-6">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div class="text-center space-y-2">
                 <div class="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
                     <i data-lucide="shield-check" class="w-8 h-8"></i>
                 </div>
                 <h3 class="text-xl font-black text-slate-900">Akses Panel Admin SPPG</h3>
-                <p class="text-xs text-slate-500">Masuk menggunakan akun admin Firebase untuk mengelola foto & menu MBG</p>
+                <p class="text-xs text-slate-500">Masukkan kata sandi khusus untuk mengelola foto & menu MBG</p>
             </div>
 
             <form onsubmit="handleAdminAuth(event)" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Email Admin</label>
-                    <input type="email" id="admin-email-input"
-                           placeholder="email admin..."
-                           autocomplete="username"
-                           class="w-full p-3.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all mb-3">
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Kata Sandi Admin</label>
                     <div class="relative">
                         <input type="password" id="admin-password-input" 
                                placeholder="Masukkan password..." 
@@ -370,7 +296,7 @@
                     </div>
                     <p id="admin-auth-error" class="text-xs text-red-600 font-semibold mt-1.5 hidden flex items-center space-x-1">
                         <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                        <span id="admin-auth-error-text">Email atau password salah.</span>
+                        <span>Kata sandi salah! Gunakan: SPPGBK4</span>
                     </p>
                 </div>
 
@@ -408,6 +334,7 @@
     <!-- MAIN CONTENT CONTAINER -->
     <main class="flex-grow">
 
+        <!-- ================= MODE PREVIEW (PUBLIC VIEW) ================= -->
         <section id="mode-preview" class="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
             
             <!-- Banner Hero Section -->
@@ -417,9 +344,9 @@
                 
                 <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div class="space-y-3 max-w-2xl">
-                        <div class="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-medium text-emerald-200 border border-white/10">
+                        <div class="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-semibold text-emerald-200 border border-white/15 shadow-sm">
                             <i data-lucide="calendar-days" class="w-4 h-4 text-emerald-400"></i>
-                            <span id="display-date-hero">Belum diatur</span>
+                            <span id="display-date-hero">Loading tanggal...</span>
                         </div>
                         <h2 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight">
                             Informasi Menu & Standar Gizi Harian MBG
@@ -431,20 +358,20 @@
 
                     <!-- Quick Badge Info -->
                     <div class="w-full lg:w-auto">
-                        <div class="grid grid-cols-3 gap-2 sm:gap-3 bg-white/10 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-white/15 text-center">
+                        <div class="grid grid-cols-3 gap-2 sm:gap-3 bg-white/10 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-white/15 text-center shadow-lg">
                             <div class="p-2">
-                                <span class="block text-[10px] sm:text-xs text-slate-300">Target Energi PB</span>
+                                <span class="block text-[10px] sm:text-xs text-slate-300 font-medium">Target Energi PB</span>
                                 <span id="badge-energi-pb" class="text-base sm:text-xl font-black text-amber-300">0.00</span>
                                 <span class="block text-[9px] sm:text-[10px] text-slate-300">kkal</span>
                             </div>
                             <div class="p-2 border-l border-white/10">
-                                <span class="block text-[10px] sm:text-xs text-slate-300">Target Protein PB</span>
+                                <span class="block text-[10px] sm:text-xs text-slate-300 font-medium">Target Protein PB</span>
                                 <span id="badge-protein-pb" class="text-base sm:text-xl font-black text-emerald-300">0.00</span>
                                 <span class="block text-[9px] sm:text-[10px] text-slate-300">gram</span>
                             </div>
                             <div class="p-2 border-l border-white/10">
-                                <span class="block text-[10px] sm:text-xs text-slate-300">Status Keamanan</span>
-                                <span class="text-[11px] sm:text-xs font-bold text-emerald-400 flex items-center justify-center space-x-1 mt-1">
+                                <span class="block text-[10px] sm:text-xs text-slate-300 font-medium">Keamanan</span>
+                                <span class="text-[11px] sm:text-xs font-extrabold text-emerald-400 flex items-center justify-center space-x-1 mt-1">
                                     <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
                                     <span>Lolos QC</span>
                                 </span>
@@ -463,21 +390,21 @@
                     <div class="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm space-y-4 reveal-slide-left">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center space-x-3">
-                                <div class="p-2.5 bg-emerald-50 rounded-xl text-emerald-600">
+                                <div class="p-2.5 bg-emerald-50 rounded-2xl text-emerald-600 border border-emerald-100">
                                     <i data-lucide="camera" class="w-5 h-5"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-bold text-slate-900 text-sm sm:text-base">Dokumentasi Foto Sajian</h3>
+                                    <h3 class="font-extrabold text-slate-900 text-sm sm:text-base">Dokumentasi Foto Sajian</h3>
                                     <p class="text-xs text-slate-500">Klik foto untuk melihat preview penuh (Ratio 4:5 / 16:9)</p>
                                 </div>
                             </div>
-                            <span id="photo-count-badge" class="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+                            <span id="photo-count-badge" class="text-xs font-extrabold px-3 py-1 bg-slate-100 text-slate-700 rounded-xl border border-slate-200">
                                 0 / 5 Foto
                             </span>
                         </div>
 
                         <!-- Active Image Display -->
-                        <div id="main-photo-wrapper" class="relative aspect-[4/3] sm:aspect-[16/10] rounded-2xl overflow-hidden bg-slate-100 group border border-slate-200 shadow-inner flex items-center justify-center">
+                        <div id="main-photo-wrapper" class="relative aspect-[4/3] sm:aspect-[16/10] rounded-2xl overflow-hidden bg-slate-100 group border border-slate-200/80 shadow-inner flex items-center justify-center">
                             
                             <!-- Display Photo when available -->
                             <img id="main-active-photo" 
@@ -495,7 +422,7 @@
                                 <p class="text-[11px] text-slate-400">Tambahkan foto pada Mode Admin</p>
                             </div>
 
-                            <div id="main-photo-overlay" class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-90 hidden pointer-events-none"></div>
+                            <div id="main-photo-overlay" class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent opacity-90 hidden pointer-events-none"></div>
                             
                             <div id="main-photo-caption-box" class="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 text-white hidden">
                                 <span class="text-[10px] sm:text-xs font-bold px-2.5 py-1 bg-emerald-600/90 rounded-md backdrop-blur-sm">
@@ -506,10 +433,10 @@
                                 </p>
                             </div>
 
-                            <button id="btn-prev-photo" onclick="prevPhoto()" aria-label="Foto Sebelumnya" class="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-slate-800 p-2 rounded-full shadow-md backdrop-blur-sm transition-all focus:ring-2 focus:ring-emerald-500 hidden">
+                            <button id="btn-prev-photo" onclick="prevPhoto()" aria-label="Foto Sebelumnya" class="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 p-2 rounded-full shadow-md backdrop-blur-sm transition-all focus:ring-2 focus:ring-emerald-500 hidden">
                                 <i data-lucide="chevron-left" class="w-5 h-5"></i>
                             </button>
-                            <button id="btn-next-photo" onclick="nextPhoto()" aria-label="Foto Selanjutnya" class="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-slate-800 p-2 rounded-full shadow-md backdrop-blur-sm transition-all focus:ring-2 focus:ring-emerald-500 hidden">
+                            <button id="btn-next-photo" onclick="nextPhoto()" aria-label="Foto Selanjutnya" class="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-slate-800 p-2 rounded-full shadow-md backdrop-blur-sm transition-all focus:ring-2 focus:ring-emerald-500 hidden">
                                 <i data-lucide="chevron-right" class="w-5 h-5"></i>
                             </button>
                         </div>
@@ -523,11 +450,11 @@
                     <div class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5 reveal-slide-left delay-100">
                         
                         <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
-                            <h3 class="text-base sm:text-lg font-bold text-slate-900 flex items-center space-x-2">
+                            <h3 class="text-base sm:text-lg font-extrabold text-slate-900 flex items-center space-x-2">
                                 <i data-lucide="utensils" class="w-5 h-5 text-bgn-blue"></i>
                                 <span>Rincian Komposisi Menu</span>
                             </h3>
-                            <span class="text-xs font-semibold px-3 py-1 bg-blue-50 text-bgn-blue rounded-full border border-blue-100">
+                            <span class="text-xs font-bold px-3 py-1 bg-blue-50 text-bgn-blue rounded-full border border-blue-100">
                                 Menu Utama
                             </span>
                         </div>
@@ -581,6 +508,7 @@
 
                 </div>
 
+                <!-- Right Column: Nutrition Cards & Chart (5 Cols) -->
                 <div class="lg:col-span-5 space-y-6">
                     
                     <!-- Nutrition Toggle Header -->
@@ -588,7 +516,7 @@
                         
                         <div class="flex items-center justify-between gap-2">
                             <div>
-                                <h3 class="text-base sm:text-lg font-bold text-slate-900">Analisis Nilai Gizi</h3>
+                                <h3 class="text-base sm:text-lg font-extrabold text-slate-900">Analisis Nilai Gizi</h3>
                                 <p class="text-xs text-slate-500">Hasil Pengujian Nutrisionis SPPG</p>
                             </div>
                             
@@ -685,7 +613,7 @@
                     <!-- Quality Assurance Banner -->
                     <div class="p-5 rounded-3xl bg-slate-900 text-white space-y-3 shadow-lg reveal-on-scroll">
                         <div class="flex items-center space-x-3">
-                            <div class="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                            <div class="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
                                 <i data-lucide="award" class="w-6 h-6"></i>
                             </div>
                             <div>
@@ -696,7 +624,7 @@
                         <ul class="text-xs text-slate-300 space-y-1.5 pt-2 border-t border-slate-800">
                             <li class="flex items-center space-x-2">
                                 <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>
-                                <span>Bahan pangan segar lokal dari petani terpilih</span>
+                                <span>Bahan pangan segar lokal dari petani & mitra terpilih</span>
                             </li>
                             <li class="flex items-center space-x-2">
                                 <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>
@@ -711,17 +639,18 @@
 
         </section>
 
+        <!-- ================= MODE ADMIN (PROTECTED PANEL) ================= -->
         <section id="mode-admin" class="hidden py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
             
             <!-- Admin Top Banner -->
             <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 reveal-on-scroll">
                 <div class="flex items-center space-x-4">
-                    <div class="p-3 bg-amber-50 rounded-2xl text-amber-600">
+                    <div class="p-3 bg-amber-50 rounded-2xl text-amber-600 border border-amber-200">
                         <i data-lucide="shield-check" class="w-7 h-7"></i>
                     </div>
                     <div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <h2 class="text-xl font-bold text-slate-900">Panel Kelola Menu & Nilai Gizi SPPG</h2>
+                            <h2 class="text-xl font-black text-slate-900">Panel Kelola Menu & Nilai Gizi SPPG</h2>
                             <div id="cloud-status-badge" class="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1"></span>
                                 <i data-lucide="cloud-check" class="w-3.5 h-3.5"></i>
@@ -736,28 +665,28 @@
 
                 <!-- Admin Action Buttons -->
                 <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="exportDataJSON()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold transition-all" title="Simpan file JSON untuk backup">
+                    <button onclick="exportDataJSON()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold transition-all" title="Simpan file JSON untuk backup">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i>
                         <span>Ekspor JSON</span>
                     </button>
 
-                    <label class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-bold transition-all cursor-pointer" title="Muat file JSON backup">
+                    <label class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-bold transition-all cursor-pointer" title="Muat file JSON backup">
                         <i data-lucide="upload" class="w-3.5 h-3.5"></i>
                         <span>Impor JSON</span>
                         <input type="file" accept=".json" onchange="importDataJSON(event)" class="hidden">
                     </label>
 
-                    <button onclick="copyGithubStateCode()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all" title="Salin kode defaultState untuk GitHub Pages">
+                    <button onclick="copyGithubStateCode()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all" title="Salin kode defaultState untuk GitHub Pages">
                         <i data-lucide="code" class="w-3.5 h-3.5 text-emerald-600"></i>
                         <span>Salin Kode GitHub</span>
                     </button>
 
-                    <button onclick="resetToDefaultData()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold transition-all">
+                    <button onclick="resetToDefaultData()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold transition-all">
                         <i data-lucide="eraser" class="w-3.5 h-3.5 text-slate-500"></i>
                         <span>Kosongkan Input</span>
                     </button>
 
-                    <button onclick="lockAdmin()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-bold transition-all">
+                    <button onclick="lockAdmin()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-bold transition-all">
                         <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
                         <span>Kunci Admin</span>
                     </button>
@@ -765,7 +694,7 @@
             </div>
 
             <!-- SMART AUTO-PASTE PARSER BOX -->
-            <div class="bg-gradient-to-br from-amber-500/10 via-amber-50 to-orange-50/50 rounded-3xl p-6 border border-amber-200 space-y-4 reveal-on-scroll">
+            <div class="bg-gradient-to-br from-amber-500/10 via-amber-50 to-orange-50/50 rounded-3xl p-6 border border-amber-200/80 space-y-4 reveal-on-scroll">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-2">
                         <div class="p-2 bg-amber-600 text-white rounded-xl">
@@ -773,17 +702,17 @@
                         </div>
                         <div>
                             <h3 class="font-extrabold text-slate-900 text-base">Copas Auto-Parser Magic Box</h3>
-                            <p class="text-xs text-slate-600">Tempel/Copas catatan teks mentah di bawah ini. System akan langsung mengisi kolom secara otomatis!</p>
+                            <p class="text-xs text-slate-600">Tempel/Copas catatan teks mentah di bawah ini. Sistem akan langsung mengisi kolom secara otomatis!</p>
                         </div>
                     </div>
-                    <span class="text-xs font-bold px-3 py-1 bg-amber-200 text-amber-900 rounded-full">
+                    <span class="text-xs font-extrabold px-3 py-1 bg-amber-200 text-amber-900 rounded-full border border-amber-300">
                         Fitur Otomatisasi
                     </span>
                 </div>
 
                 <div class="space-y-3">
                     <textarea id="smart-paste-input" 
-                              rows="6" 
+                              rows="5" 
                               placeholder="Copas teks di sini... Contoh:
 Nilai gizi menu Rabu, 30 Sept 2026
 Menu porsi besar : Nasi Putih + Ebi Furai + Tahu Balado...
@@ -796,7 +725,7 @@ Energi : 573.11 kkal..."
                         <div class="text-slate-500 italic">
                             💡 Cobalah menempelkan teks format WhatsApp/Catatan gizi harian di atas.
                         </div>
-                        <button onclick="processSmartPaste()" class="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                        <button onclick="processSmartPaste()" class="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
                             <i data-lucide="sparkles" class="w-4 h-4"></i>
                             <span>Proses Teks Sekarang</span>
                         </button>
@@ -811,7 +740,7 @@ Energi : 573.11 kkal..."
                 <div class="lg:col-span-7 space-y-6">
                     
                     <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 reveal-slide-left">
-                        <h3 class="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center space-x-2">
+                        <h3 class="text-base font-extrabold text-slate-900 border-b border-slate-100 pb-3 flex items-center space-x-2">
                             <i data-lucide="file-text" class="w-5 h-5 text-bgn-blue"></i>
                             <span>1. Tanggal & Menu Makanan</span>
                         </h3>
@@ -821,7 +750,7 @@ Energi : 573.11 kkal..."
                             <label class="block text-xs font-bold text-slate-700 mb-1">Hari & Tanggal Menu</label>
                             <input type="text" id="input-date" 
                                    placeholder="Contoh: Rabu, 30 Sept 2026" 
-                                   class="w-full p-3 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-bgn-blue outline-none transition-all">
+                                   class="w-full p-3 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-bgn-blue outline-none transition-all font-semibold">
                         </div>
 
                         <!-- PB Menu Field -->
@@ -829,7 +758,7 @@ Energi : 573.11 kkal..."
                             <label class="block text-xs font-bold text-emerald-800 mb-1">Menu Porsi Besar (PB)</label>
                             <textarea id="input-menu-pb" rows="2" 
                                       placeholder="Contoh: Nasi Putih + Ebi Furai + Tahu Balado + Tumis Labusiam + Buah Naga"
-                                      class="w-full p-3 rounded-xl border border-emerald-300 bg-emerald-50/20 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"></textarea>
+                                      class="w-full p-3 rounded-xl border border-emerald-300 bg-emerald-50/20 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-medium"></textarea>
                         </div>
 
                         <!-- PK Menu Field -->
@@ -837,14 +766,14 @@ Energi : 573.11 kkal..."
                             <label class="block text-xs font-bold text-amber-800 mb-1">Menu Porsi Kecil (PK)</label>
                             <textarea id="input-menu-pk" rows="2" 
                                       placeholder="Contoh: Nasi putih + Ebi Furai + Tahu Kecap + Tumis Labusiam + Buah Naga"
-                                      class="w-full p-3 rounded-xl border border-amber-300 bg-amber-50/20 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"></textarea>
+                                      class="w-full p-3 rounded-xl border border-amber-300 bg-amber-50/20 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium"></textarea>
                         </div>
                     </div>
 
                     <!-- Photo Uploader Section -->
                     <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 reveal-slide-left delay-100">
                         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                            <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+                            <h3 class="text-base font-extrabold text-slate-900 flex items-center space-x-2">
                                 <i data-lucide="image" class="w-5 h-5 text-emerald-600"></i>
                                 <span>2. Kelola Foto Sajian (Maksimal 5 Foto)</span>
                             </h3>
@@ -866,7 +795,7 @@ Energi : 573.11 kkal..."
                                     <input type="url" id="input-photo-url" 
                                            placeholder="Atau tempel URL gambar..." 
                                            class="flex-grow p-3 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
-                                    <button onclick="addPhotoFromURL()" class="px-3 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all shrink-0">
+                                    <button onclick="addPhotoFromURL()" class="px-3.5 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all shrink-0">
                                         <i data-lucide="plus" class="w-4 h-4"></i>
                                     </button>
                                 </div>
@@ -896,7 +825,7 @@ Energi : 573.11 kkal..."
                 <div class="lg:col-span-5 space-y-6">
                     
                     <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 reveal-slide-right">
-                        <h3 class="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center space-x-2">
+                        <h3 class="text-base font-extrabold text-slate-900 border-b border-slate-100 pb-3 flex items-center space-x-2">
                             <i data-lucide="bar-chart-3" class="w-5 h-5 text-amber-600"></i>
                             <span>3. Rincian Angka Nilai Gizi</span>
                         </h3>
@@ -905,7 +834,7 @@ Energi : 573.11 kkal..."
                         <div class="space-y-3 p-4 bg-emerald-50/40 rounded-2xl border border-emerald-200">
                             <div class="text-xs font-extrabold text-emerald-900 uppercase tracking-wider flex items-center justify-between">
                                 <span>Nilai Gizi Porsi Besar (PB)</span>
-                                <span class="text-[10px] text-emerald-700">Untuk Siswa Lanjutan</span>
+                                <span class="text-[10px] text-emerald-700 font-bold">SD Lanjutan & Menengah</span>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2 text-xs">
@@ -940,7 +869,7 @@ Energi : 573.11 kkal..."
                         <div class="space-y-3 p-4 bg-amber-50/40 rounded-2xl border border-amber-200">
                             <div class="text-xs font-extrabold text-amber-900 uppercase tracking-wider flex items-center justify-between">
                                 <span>Nilai Gizi Porsi Kecil (PK)</span>
-                                <span class="text-[10px] text-amber-700">Untuk PAUD/SD Awal</span>
+                                <span class="text-[10px] text-amber-700 font-bold">PAUD/TK & SD Awal</span>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2 text-xs">
@@ -1024,23 +953,26 @@ Energi : 573.11 kkal..."
                 </div>
             </div>
 
-            <div class="text-center text-slate-500">
+            <div class="text-center text-slate-500 font-medium">
                 &copy; 2026 SPPG Bukit Kemuning 4. Dikelola untuk Pemenuhan Nutrisi Peserta Didik.
             </div>
         </div>
     </footer>
 
+    <!-- APPLICATION CONTROLLER SCRIPT -->
     <script>
-        // ================= STATE MANAGEMENT =================
+        // ================= STATE MANAGEMENT & LOCAL STORAGE PERSISTENCE =================
+        let isAdminAuthenticated = false;
+
         const defaultState = {
-            date: "",
-            menuPB: "",
-            menuPK: "",
+            date: "Rabu, 30 Sept 2026",
+            menuPB: "Nasi Putih + Ebi Furai + Tahu Balado + Tumis Labusiam + Buah Naga",
+            menuPK: "Nasi putih + Ebi Furai + Tahu Kecap + Tumis Labusiam + Buah Naga",
             photos: [],
             activePhotoIndex: 0,
             activeNutritionPortion: 'PB',
-            pb: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 },
-            pk: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 }
+            pb: { energi: 573.11, protein: 24.50, lemak: 18.20, kh: 72.40, serat: 6.80, vitamin: 45.00 },
+            pk: { energi: 412.30, protein: 18.20, lemak: 12.80, kh: 54.10, serat: 4.50, vitamin: 32.00 }
         };
 
         function loadSavedLocalState() {
@@ -1048,14 +980,12 @@ Energi : 573.11 kkal..."
                 const saved = localStorage.getItem('sppg_mbg_app_data');
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    return {
-                        ...defaultState, ...parsed,
-                        pb: { ...defaultState.pb, ...(parsed.pb || {}) },
-                        pk: { ...defaultState.pk, ...(parsed.pk || {}) }
-                    };
+                    return { ...defaultState, ...parsed };
                 }
-            } catch (e) { console.warn("Gagal membaca local cache:", e); }
-            return { ...defaultState, pb:{...defaultState.pb}, pk:{...defaultState.pk} };
+            } catch (e) {
+                console.warn("Failed loading from localStorage:", e);
+            }
+            return { ...defaultState };
         }
 
         let appData = loadSavedLocalState();
@@ -1067,16 +997,15 @@ Energi : 573.11 kkal..."
                 localStorage.setItem('sppg_mbg_app_data', JSON.stringify(appData));
                 return true;
             } catch (e) {
-                console.error("Could not save local cache:", e);
+                console.error("Could not save to localStorage:", e);
                 return false;
             }
         }
 
         function switchMode(mode) {
-            if (mode === 'admin' && !window.isAdminAuthenticated) {
+            if (mode === 'admin' && !isAdminAuthenticated) {
                 const modal = document.getElementById('admin-auth-modal');
                 if (modal) modal.classList.remove('hidden');
-                setTimeout(() => document.getElementById('admin-email-input')?.focus(), 50);
                 return;
             }
 
@@ -1088,48 +1017,37 @@ Energi : 573.11 kkal..."
             if (mode === 'preview') {
                 if (previewSection) previewSection.classList.remove('hidden');
                 if (adminSection) adminSection.classList.add('hidden');
-                if (tabPreview) tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
-                if (tabAdmin) tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
-            } else if (mode === 'admin' && window.isAdminAuthenticated) {
+                if (tabPreview) {
+                    tabPreview.className = "mode-tab flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm bg-white text-bgn-navy";
+                }
+                if (tabAdmin) {
+                    tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition-all";
+                }
+            } else if (mode === 'admin') {
                 if (previewSection) previewSection.classList.add('hidden');
                 if (adminSection) adminSection.classList.remove('hidden');
-                if (tabAdmin) tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
-                if (tabPreview) tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
+                if (tabAdmin) {
+                    tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm bg-white text-bgn-navy";
+                }
+                if (tabPreview) {
+                    tabPreview.className = "mode-tab flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition-all";
+                }
                 syncAdminInputs();
             }
         }
 
-        window.setAdminUI = function(isAdmin) {
-            window.isAdminAuthenticated = !!isAdmin;
-            if (isAdmin) {
-                closeAdminAuthModal();
-                const logoutBtn = document.getElementById('admin-logout-button');
-                if (logoutBtn) logoutBtn.classList.remove('hidden');
-            } else {
-                const adminSection = document.getElementById('mode-admin');
-                if (adminSection) adminSection.classList.add('hidden');
-                const logoutBtn = document.getElementById('admin-logout-button');
-                if (logoutBtn) logoutBtn.classList.add('hidden');
-                const previewSection = document.getElementById('mode-preview');
-                if (previewSection) previewSection.classList.remove('hidden');
-            }
-        };
-
-        async function handleAdminAuth(e) {
+        function handleAdminAuth(e) {
             e.preventDefault();
-            const email = document.getElementById('admin-email-input')?.value || '';
-            const password = document.getElementById('admin-password-input')?.value || '';
+            const input = document.getElementById('admin-password-input').value;
             const errorMsg = document.getElementById('admin-auth-error');
-            const errorText = document.getElementById('admin-auth-error-text');
-            const result = await window.loginAdminFirebase(email, password);
-
-            if (result.success) {
+            if (input === 'SPPGBK4') {
+                isAdminAuthenticated = true;
                 if (errorMsg) errorMsg.classList.add('hidden');
+                closeAdminAuthModal();
+                switchMode('admin');
                 document.getElementById('admin-password-input').value = '';
-                showToast("Berhasil masuk Panel Admin SPPG!");
-                setTimeout(() => switchMode('admin'), 100);
+                showToast("Berhasil Masuk Panel Admin SPPG!");
             } else {
-                if (errorText) errorText.textContent = result.message || 'Email atau password salah.';
                 if (errorMsg) errorMsg.classList.remove('hidden');
             }
         }
@@ -1147,11 +1065,10 @@ Energi : 573.11 kkal..."
             pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
         }
 
-        async function lockAdmin() {
-            try { await window.logoutAdminFirebase(); } catch(e) { console.error(e); }
-            window.isAdminAuthenticated = false;
+        function lockAdmin() {
+            isAdminAuthenticated = false;
             switchMode('preview');
-            showToast("Sesi Admin telah dikunci");
+            showToast("Sesi Admin Telah Dikunci");
         }
 
         window.syncAdminInputs = function() {
@@ -1239,7 +1156,7 @@ Energi : 573.11 kkal..."
             document.getElementById(`${targetKey}-vitamin`).value = appData[targetKey].vitamin || '';
         }
 
-        async function saveAndApplyData() {
+        function saveAndApplyData() {
             appData.date = document.getElementById('input-date').value.trim();
             appData.menuPB = document.getElementById('input-menu-pb').value.trim();
             appData.menuPK = document.getElementById('input-menu-pk').value.trim();
@@ -1262,22 +1179,20 @@ Energi : 573.11 kkal..."
                 vitamin: parseFloat(document.getElementById('pk-vitamin').value) || 0
             };
 
-            if (!window.isAdminAuthenticated) {
-                showToast("Silakan masuk sebagai Admin terlebih dahulu.");
-                return;
-            }
-
             saveLocalState();
             renderAllViews();
             updateChartData();
 
             if (typeof window.saveToCloud === 'function') {
-                const success = await window.saveToCloud(appData);
-                if (success) {
-                    showToast("Berhasil disimpan ke Cloud & tampil di semua perangkat!");
-                } else {
-                    showToast("Gagal menyimpan ke Cloud. Periksa koneksi/Firebase.");
-                }
+                window.saveToCloud(appData).then((success) => {
+                    if (success) {
+                        showToast("Tersimpan di Cloud Database & Tampil di Semua Device!");
+                    } else {
+                        showToast("Tersimpan di Browser LocalStorage!");
+                    }
+                });
+            } else {
+                showToast("Tersimpan di Browser LocalStorage!");
             }
         }
 
@@ -1306,8 +1221,7 @@ Energi : 573.11 kkal..."
             showToast("Kode defaultState disalin ke Clipboard!");
         }
 
-        async function importDataJSON(event) {
-            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
+        function importDataJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
 
@@ -1321,7 +1235,7 @@ Energi : 573.11 kkal..."
                     syncAdminInputs();
                     renderAllViews();
                     updateChartData();
-                    if (typeof window.saveToCloud === 'function') await window.saveToCloud(appData);
+                    if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
                     showToast("Data Berhasil Diimpor!");
                 } catch (err) {
                     alert("Format file JSON tidak valid!");
@@ -1354,13 +1268,13 @@ Energi : 573.11 kkal..."
             const indicator = document.getElementById('active-portion-indicator');
 
             if (portion === 'PB') {
-                btnPB.className = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow-sm transition-all";
-                btnPK.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+                btnPB.className = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow-sm transition-all font-bold";
+                btnPK.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all font-bold";
                 indicator.className = "p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900";
                 indicator.innerHTML = `<span class="flex items-center space-x-1.5"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>Menampilkan Data Gizi: PORSI BESAR (PB)</span></span>`;
             } else {
-                btnPK.className = "px-3 py-1.5 rounded-lg bg-amber-600 text-white shadow-sm transition-all";
-                btnPB.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+                btnPK.className = "px-3 py-1.5 rounded-lg bg-amber-600 text-white shadow-sm transition-all font-bold";
+                btnPB.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all font-bold";
                 indicator.className = "p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between text-xs font-bold text-amber-900";
                 indicator.innerHTML = `<span class="flex items-center space-x-1.5"><i data-lucide="check-circle-2" class="w-4 h-4 text-amber-600"></i><span>Menampilkan Data Gizi: PORSI KECIL (PK)</span></span>`;
             }
@@ -1464,7 +1378,6 @@ Energi : 573.11 kkal..."
         }
 
         function addPhotoFromURL() {
-            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
             const urlInput = document.getElementById('input-photo-url');
             const url = urlInput.value.trim();
             if (!url) return;
@@ -1534,7 +1447,6 @@ Energi : 573.11 kkal..."
         }
 
         async function handleFileUpload(event) {
-            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
             const files = event.target ? event.target.files : event;
             if (!files || !files.length) return;
 
@@ -1559,8 +1471,7 @@ Energi : 573.11 kkal..."
             showToast("Foto Berhasil Disimpan!");
         }
 
-        async function removePhoto(index) {
-            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
+        function removePhoto(index) {
             appData.photos.splice(index, 1);
             if (appData.activePhotoIndex >= appData.photos.length) {
                 appData.activePhotoIndex = Math.max(0, appData.photos.length - 1);
@@ -1711,8 +1622,7 @@ Energi : 573.11 kkal..."
             nutritionChart.update();
         }
 
-        async function resetToDefaultData() {
-            if (!window.isAdminAuthenticated) { showToast("Akses Admin diperlukan."); return; }
+        function resetToDefaultData() {
             if (!confirm("Apakah Anda yakin ingin mengosongkan semua data?")) return;
             appData = {
                 date: "",
@@ -1728,7 +1638,7 @@ Energi : 573.11 kkal..."
             syncAdminInputs();
             renderAllViews();
             updateChartData();
-            if (typeof window.saveToCloud === 'function') await window.saveToCloud(appData);
+            if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
             showToast("Semua Input Berhasil Dikosongkan!");
         }
 
