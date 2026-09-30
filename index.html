@@ -77,6 +77,7 @@
                         const cloudData = docSnap.data();
                         if (cloudData && cloudData.date !== undefined) {
                             window.appData = { ...window.appData, ...cloudData };
+                            localStorage.setItem('sppg_mbg_app_data', JSON.stringify(window.appData));
                             if (typeof window.renderAllViews === 'function') {
                                 window.renderAllViews();
                             }
@@ -624,13 +625,25 @@
 
                 <!-- Admin Action Buttons -->
                 <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="resetToDefaultData()" class="inline-flex items-center space-x-2 px-3.5 py-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold transition-all">
-                        <i data-lucide="eraser" class="w-4 h-4 text-slate-500"></i>
-                        <span>Kosongkan Semua Input</span>
+                    <button onclick="exportDataJSON()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold transition-all" title="Simpan file JSON untuk backup">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>Ekspor JSON</span>
                     </button>
-                    <button onclick="lockAdmin()" class="inline-flex items-center space-x-2 px-3.5 py-2.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-bold transition-all">
-                        <i data-lucide="log-out" class="w-4 h-4"></i>
-                        <span>Kunci / Keluar Admin</span>
+
+                    <label class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-bold transition-all cursor-pointer" title="Muat file JSON backup">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                        <span>Impor JSON</span>
+                        <input type="file" accept=".json" onchange="importDataJSON(event)" class="hidden">
+                    </label>
+
+                    <button onclick="resetToDefaultData()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold transition-all">
+                        <i data-lucide="eraser" class="w-3.5 h-3.5 text-slate-500"></i>
+                        <span>Kosongkan Input</span>
+                    </button>
+
+                    <button onclick="lockAdmin()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-bold transition-all">
+                        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                        <span>Kunci Admin</span>
                     </button>
                 </div>
             </div>
@@ -837,7 +850,7 @@ Energi : 573.11 kkal..."
                         <!-- Save & Apply Changes Button -->
                         <button onclick="saveAndApplyData()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl shadow-lg transition-all text-sm flex items-center justify-center space-x-2">
                             <i data-lucide="check-circle" class="w-5 h-5"></i>
-                            <span>Simpan & Tampilkan ke Semua Device</span>
+                            <span>Simpan & Tersimpan di Browser / Cloud</span>
                         </button>
                     </div>
 
@@ -893,10 +906,9 @@ Energi : 573.11 kkal..."
     </footer>
 
     <script>
-        // ================= STATE MANAGEMENT =================
+        // ================= STATE MANAGEMENT & LOCAL STORAGE PERSISTENCE =================
         let isAdminAuthenticated = false;
 
-        // Clean Empty Default State
         const defaultState = {
             date: "",
             menuPB: "",
@@ -908,9 +920,31 @@ Energi : 573.11 kkal..."
             pk: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 }
         };
 
-        let appData = { ...defaultState };
+        // Load persisted state from LocalStorage on load
+        function loadSavedLocalState() {
+            try {
+                const saved = localStorage.getItem('sppg_mbg_app_data');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    return { ...defaultState, ...parsed };
+                }
+            } catch (e) {
+                console.warn("Failed loading from localStorage:", e);
+            }
+            return { ...defaultState };
+        }
+
+        let appData = loadSavedLocalState();
         window.appData = appData;
         let nutritionChart = null;
+
+        function saveLocalState() {
+            try {
+                localStorage.setItem('sppg_mbg_app_data', JSON.stringify(appData));
+            } catch (e) {
+                console.warn("Could not save to localStorage (quota exceeded or restricted):", e);
+            }
+        }
 
         function switchMode(mode) {
             if (mode === 'admin' && !isAdminAuthenticated) {
@@ -1089,20 +1123,56 @@ Energi : 573.11 kkal..."
                 vitamin: parseFloat(document.getElementById('pk-vitamin').value) || 0
             };
 
+            // Save locally so page refresh won't erase state
+            saveLocalState();
+
             renderAllViews();
             updateChartData();
 
             if (typeof window.saveToCloud === 'function') {
                 window.saveToCloud(appData).then((success) => {
                     if (success) {
-                        showToast("Data Tersimpan & Tersinkron di Semua Device!");
+                        showToast("Tersimpan di Browser & Cloud Firestore!");
                     } else {
-                        showToast("Data Disimpan Lokal");
+                        showToast("Tersimpan di Penyimpanan Browser LocalStorage!");
                     }
                 });
             } else {
-                showToast("Data Disimpan!");
+                showToast("Tersimpan di Penyimpanan Browser LocalStorage!");
             }
+        }
+
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `sppg_menu_${(appData.date || 'mbg').replace(/[^a-z0-9]/gi, '_')}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast("File JSON Berhasil Diunduh!");
+        }
+
+        function importDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    appData = { ...defaultState, ...imported };
+                    window.appData = appData;
+                    saveLocalState();
+                    syncAdminInputs();
+                    renderAllViews();
+                    updateChartData();
+                    showToast("Data Berhasil Diimpor dari JSON!");
+                } catch (err) {
+                    alert("Format file JSON tidak valid!");
+                }
+            };
+            reader.readAsText(file);
         }
 
         function renderAllViews() {
@@ -1250,6 +1320,7 @@ Energi : 573.11 kkal..."
 
             appData.photos.push(url);
             urlInput.value = '';
+            saveLocalState();
             renderPhotos();
             showToast("Foto Berhasil Ditambahkan!");
         }
@@ -1266,6 +1337,7 @@ Energi : 573.11 kkal..."
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     appData.photos.push(e.target.result);
+                    saveLocalState();
                     renderPhotos();
                 };
                 reader.readAsDataURL(files[i]);
@@ -1277,6 +1349,7 @@ Energi : 573.11 kkal..."
             if (appData.activePhotoIndex >= appData.photos.length) {
                 appData.activePhotoIndex = Math.max(0, appData.photos.length - 1);
             }
+            saveLocalState();
             renderPhotos();
             showToast("Foto Dihapus");
         }
@@ -1422,6 +1495,7 @@ Energi : 573.11 kkal..."
         }
 
         function resetToDefaultData() {
+            if (!confirm("Apakah Anda yakin ingin mengosongkan semua data?")) return;
             appData = {
                 date: "",
                 menuPB: "",
@@ -1432,6 +1506,7 @@ Energi : 573.11 kkal..."
                 pb: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 },
                 pk: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 }
             };
+            localStorage.removeItem('sppg_mbg_app_data');
             syncAdminInputs();
             renderAllViews();
             updateChartData();
