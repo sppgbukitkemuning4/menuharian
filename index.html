@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Menu MBG - SPPG Bukit Kemuning 4 | Badan Gizi Nasional</title>
 
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -35,41 +36,55 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Chart.js for Nutrition Visuals -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- Firebase SDK (Realtime Cloud Persistence Across ALL Devices) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Firebase configuration
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "demo-key",
-            authDomain: "sppg-mbg.firebaseapp.com",
-            projectId: "sppg-mbg",
-            storageBucket: "sppg-mbg.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef"
-        };
+        
+        // Retrieve custom saved Firebase config for GitHub Pages if exists
+        const savedFirebaseConfig = localStorage.getItem('sppg_custom_firebase_config');
+        let parsedCustomConfig = null;
+        if (savedFirebaseConfig) {
+            try { parsedCustomConfig = JSON.parse(savedFirebaseConfig); } catch(e){}
+        }
+
+        // Global Firebase configuration fallback
+        const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config) 
+            ? JSON.parse(__firebase_config) 
+            : (parsedCustomConfig || {
+                apiKey: "demo-key",
+                authDomain: "sppg-mbg.firebaseapp.com",
+                projectId: "sppg-mbg",
+                storageBucket: "sppg-mbg.appspot.com",
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abcdef"
+            });
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'sppg-bukit-kemuning-4';
 
         let app, auth, db;
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
+        window.isCloudConnected = false;
 
-            const initAuth = async () => {
+        async function initCloudDatabase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
-            };
 
-            initAuth().then(() => {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'mbg_menu', 'current');
                 
                 onSnapshot(docRef, (docSnap) => {
@@ -78,23 +93,24 @@
                         if (cloudData && cloudData.date !== undefined) {
                             window.appData = { ...window.appData, ...cloudData };
                             localStorage.setItem('sppg_mbg_app_data', JSON.stringify(window.appData));
-                            if (typeof window.renderAllViews === 'function') {
-                                window.renderAllViews();
-                            }
-                            if (typeof window.updateChartData === 'function') {
-                                window.updateChartData();
-                            }
-                            if (typeof window.syncAdminInputs === 'function') {
-                                window.syncAdminInputs();
-                            }
+                            window.isCloudConnected = true;
+                            updateCloudBadgeStatus(true);
+
+                            if (typeof window.renderAllViews === 'function') window.renderAllViews();
+                            if (typeof window.updateChartData === 'function') window.updateChartData();
+                            if (typeof window.syncAdminInputs === 'function') window.syncAdminInputs();
                         }
                     }
                 }, (error) => {
-                    console.warn("Firestore sync notification:", error.message);
+                    console.warn("Firestore sync status:", error.message);
+                    window.isCloudConnected = false;
+                    updateCloudBadgeStatus(false);
                 });
-            });
-        } catch (e) {
-            console.warn("Firebase fallback to local memory state:", e);
+            } catch (e) {
+                console.warn("Firebase fallback to local memory state:", e);
+                window.isCloudConnected = false;
+                updateCloudBadgeStatus(false);
+            }
         }
 
         window.saveToCloud = async function(dataToSave) {
@@ -108,6 +124,22 @@
                 return false;
             }
         };
+
+        function updateCloudBadgeStatus(isConnected) {
+            const badge = document.getElementById('cloud-status-badge');
+            if (badge) {
+                if (isConnected) {
+                    badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300";
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1"></span><i data-lucide="cloud-check" class="w-3.5 h-3.5"></i><span>Cloud Realtime Aktif</span>`;
+                } else {
+                    badge.className = "inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300";
+                    badge.innerHTML = `<i data-lucide="cloud-off" class="w-3.5 h-3.5"></i><span>Mode Simpan Lokal</span>`;
+                }
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        initCloudDatabase();
     </script>
 
     <style>
@@ -240,6 +272,7 @@
         </div>
     </header>
 
+    <!-- ADMIN AUTHENTICATION MODAL -->
     <div id="admin-auth-modal" class="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-6">
             <div class="text-center space-y-2">
@@ -279,6 +312,7 @@
         </div>
     </div>
 
+    <!-- PHOTO LIGHTBOX PREVIEW MODAL -->
     <div id="photo-lightbox-modal" class="fixed inset-0 z-[120] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
         <div class="relative max-w-4xl w-full flex flex-col items-center">
             <button onclick="closeLightboxModal()" class="absolute -top-12 right-0 text-white hover:text-slate-300 p-2 bg-white/10 rounded-full backdrop-blur-sm transition-all">
@@ -603,7 +637,6 @@
 
         </section>
 
-
         <section id="mode-admin" class="hidden py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
             
             <!-- Admin Top Banner -->
@@ -613,12 +646,16 @@
                         <i data-lucide="shield-check" class="w-7 h-7"></i>
                     </div>
                     <div>
-                        <div class="flex items-center space-x-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <h2 class="text-xl font-bold text-slate-900">Panel Kelola Menu & Nilai Gizi SPPG</h2>
-                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">Tergembok SPPGBK4</span>
+                            <div id="cloud-status-badge" class="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1"></span>
+                                <i data-lucide="cloud-check" class="w-3.5 h-3.5"></i>
+                                <span>Cloud Realtime Aktif</span>
+                            </div>
                         </div>
-                        <p class="text-xs text-slate-500">
-                            Kelola postingan foto sajian (maksimal 5 foto), rincian menu porsi besar/kecil, dan angka gizi
+                        <p class="text-xs text-slate-500 mt-1">
+                            Semua perubahan dari HP / Laptop mana saja akan tersimpan otomatis di Cloud Database secara Real-time.
                         </p>
                     </div>
                 </div>
@@ -635,6 +672,11 @@
                         <span>Impor JSON</span>
                         <input type="file" accept=".json" onchange="importDataJSON(event)" class="hidden">
                     </label>
+
+                    <button onclick="copyGithubStateCode()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold transition-all" title="Salin kode defaultState untuk GitHub Pages">
+                        <i data-lucide="code" class="w-3.5 h-3.5 text-emerald-600"></i>
+                        <span>Salin Kode GitHub</span>
+                    </button>
 
                     <button onclick="resetToDefaultData()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold transition-all">
                         <i data-lucide="eraser" class="w-3.5 h-3.5 text-slate-500"></i>
@@ -738,14 +780,22 @@ Energi : 573.11 kkal..."
                         </div>
 
                         <div class="space-y-4">
-                            <div class="flex flex-col sm:flex-row gap-2">
-                                <input type="url" id="input-photo-url" 
-                                       placeholder="Masukkan URL foto dari internet atau Google Drive..." 
-                                       class="flex-grow p-3 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
-                                <button onclick="addPhotoFromURL()" class="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 shrink-0">
-                                    <i data-lucide="plus" class="w-4 h-4"></i>
-                                    <span>Tambah URL</span>
-                                </button>
+                            <!-- Direct Mobile Camera/Gallery Trigger Button -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <label class="p-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md">
+                                    <i data-lucide="camera" class="w-4 h-4"></i>
+                                    <span>Ambil Foto HP / Galeri</span>
+                                    <input type="file" accept="image/*" multiple onchange="handleFileUpload(event)" class="hidden">
+                                </label>
+
+                                <div class="flex space-x-1">
+                                    <input type="url" id="input-photo-url" 
+                                           placeholder="Atau tempel URL gambar..." 
+                                           class="flex-grow p-3 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
+                                    <button onclick="addPhotoFromURL()" class="px-3 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all shrink-0">
+                                        <i data-lucide="plus" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             </div>
 
                             <!-- Drag & Drop Dropzone Box -->
@@ -755,7 +805,7 @@ Energi : 573.11 kkal..."
                                 <div class="space-y-2 pointer-events-none">
                                     <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto text-slate-400"></i>
                                     <p class="text-xs font-bold text-slate-700">Drag & Drop Foto / Klik / Copas Gambar (Ctrl+V)</p>
-                                    <p class="text-[10px] text-slate-400">Format PNG, JPG, WebP • Otomatis Preview & Ratio 4:5 IG</p>
+                                    <p class="text-[10px] text-slate-400">Format PNG, JPG, WebP • Otomatis Kompresi & Format 4:5 IG</p>
                                 </div>
                             </div>
                         </div>
@@ -849,8 +899,8 @@ Energi : 573.11 kkal..."
 
                         <!-- Save & Apply Changes Button -->
                         <button onclick="saveAndApplyData()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl shadow-lg transition-all text-sm flex items-center justify-center space-x-2">
-                            <i data-lucide="check-circle" class="w-5 h-5"></i>
-                            <span>Simpan & Tersimpan di Browser / Cloud</span>
+                            <i data-lucide="cloud-upload" class="w-5 h-5"></i>
+                            <span>Simpan & Tampilkan ke Semua Device</span>
                         </button>
                     </div>
 
@@ -862,6 +912,7 @@ Energi : 573.11 kkal..."
 
     </main>
 
+    <!-- FOOTER -->
     <footer class="bg-slate-900 text-slate-400 py-10 border-t border-slate-800 text-xs no-print">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
             <div class="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-slate-800 pb-8">
@@ -920,7 +971,6 @@ Energi : 573.11 kkal..."
             pk: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 }
         };
 
-        // Load persisted state from LocalStorage on load
         function loadSavedLocalState() {
             try {
                 const saved = localStorage.getItem('sppg_mbg_app_data');
@@ -943,8 +993,7 @@ Energi : 573.11 kkal..."
                 localStorage.setItem('sppg_mbg_app_data', JSON.stringify(appData));
                 return true;
             } catch (e) {
-                console.error("Could not save to localStorage (quota exceeded or restricted):", e);
-                showToast("Peringatan: Ukuran data terlalu besar untuk browser!");
+                console.error("Could not save to localStorage:", e);
                 return false;
             }
         }
@@ -1126,22 +1175,20 @@ Energi : 573.11 kkal..."
                 vitamin: parseFloat(document.getElementById('pk-vitamin').value) || 0
             };
 
-            // Save locally so page refresh won't erase state
             saveLocalState();
-
             renderAllViews();
             updateChartData();
 
             if (typeof window.saveToCloud === 'function') {
                 window.saveToCloud(appData).then((success) => {
                     if (success) {
-                        showToast("Tersimpan di Browser & Cloud Firestore!");
+                        showToast("Tersimpan di Cloud Database & Tampil di Semua Device!");
                     } else {
-                        showToast("Tersimpan di Penyimpanan Browser LocalStorage!");
+                        showToast("Tersimpan di Browser LocalStorage!");
                     }
                 });
             } else {
-                showToast("Tersimpan di Penyimpanan Browser LocalStorage!");
+                showToast("Tersimpan di Browser LocalStorage!");
             }
         }
 
@@ -1154,6 +1201,20 @@ Energi : 573.11 kkal..."
             downloadAnchor.click();
             downloadAnchor.remove();
             showToast("File JSON Berhasil Diunduh!");
+        }
+
+        function copyGithubStateCode() {
+            const stateJson = JSON.stringify(appData, null, 4);
+            const codeSnippet = `const defaultState = ${stateJson};`;
+            
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = codeSnippet;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextArea);
+
+            showToast("Kode defaultState disalin ke Clipboard!");
         }
 
         function importDataJSON(event) {
@@ -1170,7 +1231,8 @@ Energi : 573.11 kkal..."
                     syncAdminInputs();
                     renderAllViews();
                     updateChartData();
-                    showToast("Data Berhasil Diimpor dari JSON!");
+                    if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
+                    showToast("Data Berhasil Diimpor!");
                 } catch (err) {
                     alert("Format file JSON tidak valid!");
                 }
@@ -1325,17 +1387,13 @@ Energi : 573.11 kkal..."
             urlInput.value = '';
             saveLocalState();
             renderPhotos();
-            if (typeof window.saveToCloud === 'function') {
-                window.saveToCloud(appData);
-            }
+            if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
             showToast("Foto Berhasil Ditambahkan!");
         }
 
-        // Helper function for Client-Side Canvas Image Compression
         async function compressAndResizeImage(file, maxWidth = 800, quality = 0.7) {
             return new Promise((resolve) => {
                 if (typeof file === 'string' && file.startsWith('data:image')) {
-                    // Already a base64 string
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
@@ -1405,9 +1463,7 @@ Energi : 573.11 kkal..."
 
             saveLocalState();
             renderPhotos();
-            if (typeof window.saveToCloud === 'function') {
-                window.saveToCloud(appData);
-            }
+            if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
             showToast("Foto Berhasil Disimpan!");
         }
 
@@ -1418,9 +1474,7 @@ Energi : 573.11 kkal..."
             }
             saveLocalState();
             renderPhotos();
-            if (typeof window.saveToCloud === 'function') {
-                window.saveToCloud(appData);
-            }
+            if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
             showToast("Foto Dihapus");
         }
 
@@ -1580,6 +1634,7 @@ Energi : 573.11 kkal..."
             syncAdminInputs();
             renderAllViews();
             updateChartData();
+            if (typeof window.saveToCloud === 'function') window.saveToCloud(appData);
             showToast("Semua Input Berhasil Dikosongkan!");
         }
 
