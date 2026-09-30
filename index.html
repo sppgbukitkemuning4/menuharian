@@ -1,1 +1,1490 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu MBG - SPPG Bukit Kemuning 4 | Badan Gizi Nasional</title>
 
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bgn: {
+                            navy: '#0f2942',
+                            blue: '#1e3a8a',
+                            lightBlue: '#3b82f6',
+                            emerald: '#059669',
+                            teal: '#0d9488',
+                            gold: '#d97706',
+                            sand: '#fef3c7',
+                            bg: '#f8fafc'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase configuration
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "demo-key",
+            authDomain: "sppg-mbg.firebaseapp.com",
+            projectId: "sppg-mbg",
+            storageBucket: "sppg-mbg.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
+        };
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sppg-bukit-kemuning-4';
+
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            const initAuth = async () => {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            };
+
+            initAuth().then(() => {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'mbg_menu', 'current');
+                
+                onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const cloudData = docSnap.data();
+                        if (cloudData && cloudData.date !== undefined) {
+                            window.appData = { ...window.appData, ...cloudData };
+                            if (typeof window.renderAllViews === 'function') {
+                                window.renderAllViews();
+                            }
+                            if (typeof window.updateChartData === 'function') {
+                                window.updateChartData();
+                            }
+                            if (typeof window.syncAdminInputs === 'function') {
+                                window.syncAdminInputs();
+                            }
+                        }
+                    }
+                }, (error) => {
+                    console.warn("Firestore sync notification:", error.message);
+                });
+            });
+        } catch (e) {
+            console.warn("Firebase fallback to local memory state:", e);
+        }
+
+        window.saveToCloud = async function(dataToSave) {
+            if (!db || !auth.currentUser) return false;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'mbg_menu', 'current');
+                await setDoc(docRef, { ...dataToSave, updatedAt: new Date().toISOString() });
+                return true;
+            } catch (err) {
+                console.error("Cloud Save Error:", err);
+                return false;
+            }
+        };
+    </script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+
+        .gradient-bgn {
+            background: linear-gradient(135deg, #0f2942 0%, #1e3a8a 50%, #059669 100%);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .reveal-on-scroll {
+            opacity: 0;
+            transform: translateY(24px) scale(0.98);
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            will-change: opacity, transform;
+        }
+
+        .reveal-slide-left {
+            opacity: 0;
+            transform: translateX(-30px);
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal-slide-right {
+            opacity: 0;
+            transform: translateX(30px);
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal-on-scroll.is-visible,
+        .reveal-slide-left.is-visible,
+        .reveal-slide-right.is-visible {
+            opacity: 1 !important;
+            transform: translateY(0) translateX(0) scale(1) !important;
+        }
+
+        @keyframes subtle-float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-8px) rotate(1deg); }
+        }
+
+        .animate-float {
+            animation: subtle-float 6s ease-in-out infinite;
+        }
+
+        .delay-100 { transition-delay: 100ms; }
+        .delay-200 { transition-delay: 200ms; }
+        .delay-300 { transition-delay: 300ms; }
+
+        .aspect-instagram {
+            aspect-ratio: 4 / 5;
+        }
+
+        .drag-active {
+            border-color: #059669 !important;
+            background-color: #ecfdf5 !important;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-bgn-emerald selection:text-white">
+
+    <header id="main-header" class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20 transition-all duration-300" id="header-inner">
+                
+                <!-- Logo & Institution Info -->
+                <div class="flex items-center space-x-3 sm:space-x-4">
+                    <div class="relative group">
+                        <img src="https://www.bgn.go.id/logo-bgn.png" 
+                             alt="Logo Badan Gizi Nasional" 
+                             class="h-12 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                             onerror="this.src='https://placehold.co/120x120/0f2942/ffffff?text=BGN'">
+                    </div>
+                    <div class="h-10 w-[1px] bg-slate-200 hidden sm:block"></div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                MBG (Makan Bergizi Gratis)
+                            </span>
+                            <span class="text-xs font-semibold text-slate-500 hidden md:inline">Badan Gizi Nasional</span>
+                        </div>
+                        <h1 class="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-tight">
+                            SPPG BUKIT KEMUNING 4
+                        </h1>
+                    </div>
+                </div>
+
+                <!-- Mode Switcher Navigation -->
+                <div class="flex items-center space-x-1 sm:space-x-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                    <button onclick="switchMode('preview')" id="tab-preview" 
+                            class="mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy">
+                        <i data-lucide="eye" class="w-4 h-4 text-emerald-600"></i>
+                        <span>Mode Preview</span>
+                    </button>
+
+                    <button onclick="switchMode('admin')" id="tab-admin" 
+                            class="mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all">
+                        <i data-lucide="lock" class="w-4 h-4 text-amber-600"></i>
+                        <span>Mode Admin</span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </header>
+
+    <div id="admin-auth-modal" class="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                    <i data-lucide="shield-check" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-xl font-black text-slate-900">Akses Panel Admin SPPG</h3>
+                <p class="text-xs text-slate-500">Masukkan kata sandi khusus untuk mengelola foto & menu MBG</p>
+            </div>
+
+            <form onsubmit="handleAdminAuth(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Kata Sandi Admin</label>
+                    <div class="relative">
+                        <input type="password" id="admin-password-input" 
+                               placeholder="Masukkan password..." 
+                               class="w-full p-3.5 pr-10 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all font-mono">
+                        <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                            <i data-lucide="eye" id="eye-icon" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <p id="admin-auth-error" class="text-xs text-red-600 font-semibold mt-1.5 hidden flex items-center space-x-1">
+                        <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                        <span>Kata sandi salah! Gunakan: SPPGBK4</span>
+                    </p>
+                </div>
+
+                <div class="flex items-center space-x-3 pt-2">
+                    <button type="button" onclick="closeAdminAuthModal()" class="w-1/2 py-3 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold text-xs transition-all">
+                        Batal
+                    </button>
+                    <button type="submit" class="w-1/2 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs transition-all shadow-md">
+                        Masuk Admin
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="photo-lightbox-modal" class="fixed inset-0 z-[120] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="relative max-w-4xl w-full flex flex-col items-center">
+            <button onclick="closeLightboxModal()" class="absolute -top-12 right-0 text-white hover:text-slate-300 p-2 bg-white/10 rounded-full backdrop-blur-sm transition-all">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+            <div id="lightbox-aspect-container" class="relative w-full max-w-lg aspect-instagram bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex items-center justify-center">
+                <img id="lightbox-modal-img" src="" class="w-full h-full object-cover">
+            </div>
+            <div class="mt-4 flex items-center justify-between w-full max-w-lg text-white text-xs">
+                <span id="lightbox-caption" class="font-semibold">Foto Sajian Riil (Format 4:5 Instagram)</span>
+                <div class="flex space-x-2">
+                    <button onclick="setLightboxAspect('4:5')" id="aspect-btn-45" class="px-3 py-1 rounded-lg bg-emerald-600 text-white font-bold">4:5 IG</button>
+                    <button onclick="setLightboxAspect('16:9')" id="aspect-btn-169" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-300 font-bold hover:bg-slate-700">16:9 Wide</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-grow">
+
+        <section id="mode-preview" class="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+            
+            <!-- Banner Hero Section -->
+            <div class="relative rounded-3xl overflow-hidden gradient-bgn p-6 sm:p-10 text-white shadow-xl reveal-on-scroll">
+                <div id="hero-bg-blob" class="absolute -right-10 -bottom-10 w-96 h-96 bg-white/5 rounded-full blur-3xl pointer-events-none transition-transform duration-700 ease-out"></div>
+                <div class="absolute right-1/3 top-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none animate-float"></div>
+                
+                <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div class="space-y-3 max-w-2xl">
+                        <div class="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-medium text-emerald-200 border border-white/10">
+                            <i data-lucide="calendar-days" class="w-4 h-4 text-emerald-400"></i>
+                            <span id="display-date-hero">Belum diatur</span>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight">
+                            Informasi Menu & Standar Gizi Harian MBG
+                        </h2>
+                        <p class="text-slate-200 text-xs sm:text-sm lg:text-base leading-relaxed">
+                            Program Pemenuhan Makan Bergizi Gratis (MBG) oleh Satuan Pelayanan Pemenuhan Gizi (SPPG) Bukit Kemuning 4. Menjamin asupan gizi seimbang, higienis, dan berkualitas.
+                        </p>
+                    </div>
+
+                    <!-- Quick Badge Info -->
+                    <div class="w-full lg:w-auto">
+                        <div class="grid grid-cols-3 gap-2 sm:gap-3 bg-white/10 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-white/15 text-center">
+                            <div class="p-2">
+                                <span class="block text-[10px] sm:text-xs text-slate-300">Target Energi PB</span>
+                                <span id="badge-energi-pb" class="text-base sm:text-xl font-black text-amber-300">0.00</span>
+                                <span class="block text-[9px] sm:text-[10px] text-slate-300">kkal</span>
+                            </div>
+                            <div class="p-2 border-l border-white/10">
+                                <span class="block text-[10px] sm:text-xs text-slate-300">Target Protein PB</span>
+                                <span id="badge-protein-pb" class="text-base sm:text-xl font-black text-emerald-300">0.00</span>
+                                <span class="block text-[9px] sm:text-[10px] text-slate-300">gram</span>
+                            </div>
+                            <div class="p-2 border-l border-white/10">
+                                <span class="block text-[10px] sm:text-xs text-slate-300">Status Keamanan</span>
+                                <span class="text-[11px] sm:text-xs font-bold text-emerald-400 flex items-center justify-center space-x-1 mt-1">
+                                    <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                                    <span>Lolos QC</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+
+                <!-- Left Column: Menu Photos Carousel & Description (7 Cols) -->
+                <div class="lg:col-span-7 space-y-6">
+                    
+                    <!-- Photo Gallery Section -->
+                    <div class="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm space-y-4 reveal-slide-left">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="p-2.5 bg-emerald-50 rounded-xl text-emerald-600">
+                                    <i data-lucide="camera" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900 text-sm sm:text-base">Dokumentasi Foto Sajian</h3>
+                                    <p class="text-xs text-slate-500">Klik foto untuk melihat preview penuh (Ratio 4:5 / 16:9)</p>
+                                </div>
+                            </div>
+                            <span id="photo-count-badge" class="text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg">
+                                0 / 5 Foto
+                            </span>
+                        </div>
+
+                        <!-- Active Image Display -->
+                        <div id="main-photo-wrapper" class="relative aspect-[4/3] sm:aspect-[16/10] rounded-2xl overflow-hidden bg-slate-100 group border border-slate-200 shadow-inner flex items-center justify-center">
+                            
+                            <!-- Display Photo when available -->
+                            <img id="main-active-photo" 
+                                 src="" 
+                                 alt="Sajian Menu MBG" 
+                                 onclick="openLightboxModal()"
+                                 class="w-full h-full object-cover transition-all duration-500 cursor-pointer hidden">
+                            
+                            <!-- Empty Photo Fallback -->
+                            <div id="main-photo-empty" class="text-center space-y-2 p-6 flex flex-col items-center justify-center text-slate-400">
+                                <div class="p-4 bg-slate-50 rounded-full border border-slate-200">
+                                    <i data-lucide="image-off" class="w-8 h-8 text-slate-300"></i>
+                                </div>
+                                <p class="text-xs font-bold text-slate-500">Belum Ada Foto Sajian Hari Ini</p>
+                                <p class="text-[11px] text-slate-400">Tambahkan foto pada Mode Admin</p>
+                            </div>
+
+                            <div id="main-photo-overlay" class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-90 hidden pointer-events-none"></div>
+                            
+                            <div id="main-photo-caption-box" class="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 text-white hidden">
+                                <span class="text-[10px] sm:text-xs font-bold px-2.5 py-1 bg-emerald-600/90 rounded-md backdrop-blur-sm">
+                                    Foto Sajian Riil SPPG
+                                </span>
+                                <p id="main-photo-caption" class="text-xs sm:text-sm font-semibold mt-1 drop-shadow-sm">
+                                    Paket Menu MBG Seimbang Hari Ini
+                                </p>
+                            </div>
+
+                            <button id="btn-prev-photo" onclick="prevPhoto()" aria-label="Foto Sebelumnya" class="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-slate-800 p-2 rounded-full shadow-md backdrop-blur-sm transition-all focus:ring-2 focus:ring-emerald-500 hidden">
+                                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                            </button>
+                            <button id="btn-next-photo" onclick="nextPhoto()" aria-label="Foto Selanjutnya" class="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-slate-800 p-2 rounded-full shadow-md backdrop-blur-sm transition-all focus:ring-2 focus:ring-emerald-500 hidden">
+                                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+
+                        <!-- Thumbnails Row -->
+                        <div id="thumbnails-container" class="grid grid-cols-5 gap-2 pt-1">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5 reveal-slide-left delay-100">
+                        
+                        <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+                            <h3 class="text-base sm:text-lg font-bold text-slate-900 flex items-center space-x-2">
+                                <i data-lucide="utensils" class="w-5 h-5 text-bgn-blue"></i>
+                                <span>Rincian Komposisi Menu</span>
+                            </h3>
+                            <span class="text-xs font-semibold px-3 py-1 bg-blue-50 text-bgn-blue rounded-full border border-blue-100">
+                                Menu Utama
+                            </span>
+                        </div>
+
+                        <!-- Portion Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            
+                            <!-- Porsi Besar Card -->
+                            <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/80 to-teal-50/50 border border-emerald-200/80 space-y-3 flex flex-col justify-between hover:shadow-md transition-all duration-300">
+                                <div class="space-y-3">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/60 pb-2">
+                                        <span class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-sm shrink-0">
+                                            <i data-lucide="scale" class="w-3.5 h-3.5"></i>
+                                            <span>Porsi Besar (PB)</span>
+                                        </span>
+                                        <span class="text-[11px] text-emerald-800 font-bold leading-tight">SD Kelas 4–6, SMP, SMA, Bumil, Busui</span>
+                                    </div>
+                                    <div id="display-menu-pb" class="text-slate-800 font-medium text-xs sm:text-sm leading-relaxed min-h-[3rem]">
+                                        -
+                                    </div>
+                                </div>
+                                <div class="pt-3 border-t border-emerald-200/60 flex items-center justify-between text-xs font-bold text-emerald-900 mt-2">
+                                    <span>Total Kalori:</span>
+                                    <span id="pb-kalori-inline" class="text-emerald-700 font-extrabold text-sm">0.00 kkal</span>
+                                </div>
+                            </div>
+
+                            <!-- Porsi Kecil Card -->
+                            <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50/80 to-orange-50/50 border border-amber-200/80 space-y-3 flex flex-col justify-between hover:shadow-md transition-all duration-300">
+                                <div class="space-y-3">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 pb-2">
+                                        <span class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-600 text-white shadow-sm shrink-0">
+                                            <i data-lucide="pie-chart" class="w-3.5 h-3.5"></i>
+                                            <span>Porsi Kecil (PK)</span>
+                                        </span>
+                                        <span class="text-[11px] text-amber-800 font-bold leading-tight">Balita, PAUD/TK, SD Kelas 1–3</span>
+                                    </div>
+                                    <div id="display-menu-pk" class="text-slate-800 font-medium text-xs sm:text-sm leading-relaxed min-h-[3rem]">
+                                        -
+                                    </div>
+                                </div>
+                                <div class="pt-3 border-t border-amber-200/60 flex items-center justify-between text-xs font-bold text-amber-900 mt-2">
+                                    <span>Total Kalori:</span>
+                                    <span id="pk-kalori-inline" class="text-amber-700 font-extrabold text-sm">0.00 kkal</span>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="lg:col-span-5 space-y-6">
+                    
+                    <!-- Nutrition Toggle Header -->
+                    <div class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5 reveal-slide-right">
+                        
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-base sm:text-lg font-bold text-slate-900">Analisis Nilai Gizi</h3>
+                                <p class="text-xs text-slate-500">Hasil Pengujian Nutrisionis SPPG</p>
+                            </div>
+                            
+                            <!-- Portion Switch Switcher -->
+                            <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
+                                <button onclick="setNutritionTab('PB')" id="nutri-btn-pb" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow-sm transition-all">
+                                    PB (Besar)
+                                </button>
+                                <button onclick="setNutritionTab('PK')" id="nutri-btn-pk" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                                    PK (Kecil)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Active Portion Label -->
+                        <div id="active-portion-indicator" class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900">
+                            <span class="flex items-center space-x-1.5">
+                                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+                                <span>Menampilkan Data Gizi: PORSI BESAR (PB)</span>
+                            </span>
+                        </div>
+
+                        <!-- Nutritional Grid Cards -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5 sm:gap-3">
+                            
+                            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-md transition-all duration-300">
+                                <div class="flex items-center space-x-1.5 text-amber-600 text-xs font-bold mb-1">
+                                    <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                                    <span>Energi</span>
+                                </div>
+                                <div id="card-energi" class="text-xl sm:text-2xl font-black text-slate-900">0.00</div>
+                                <div class="text-[10px] sm:text-[11px] text-slate-500 font-medium">Kilo Kalori (kkal)</div>
+                            </div>
+
+                            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-md transition-all duration-300">
+                                <div class="flex items-center space-x-1.5 text-emerald-600 text-xs font-bold mb-1">
+                                    <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+                                    <span>Protein</span>
+                                </div>
+                                <div id="card-protein" class="text-xl sm:text-2xl font-black text-slate-900">0.00</div>
+                                <div class="text-[10px] sm:text-[11px] text-slate-500 font-medium">Gram (g)</div>
+                            </div>
+
+                            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-md transition-all duration-300">
+                                <div class="flex items-center space-x-1.5 text-blue-600 text-xs font-bold mb-1">
+                                    <i data-lucide="droplet" class="w-3.5 h-3.5"></i>
+                                    <span>Lemak</span>
+                                </div>
+                                <div id="card-lemak" class="text-xl sm:text-2xl font-black text-slate-900">0.00</div>
+                                <div class="text-[10px] sm:text-[11px] text-slate-500 font-medium">Gram (g)</div>
+                            </div>
+
+                            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-md transition-all duration-300">
+                                <div class="flex items-center space-x-1.5 text-purple-600 text-xs font-bold mb-1">
+                                    <i data-lucide="wheat" class="w-3.5 h-3.5"></i>
+                                    <span>Karbohidrat</span>
+                                </div>
+                                <div id="card-kh" class="text-xl sm:text-2xl font-black text-slate-900">0.00</div>
+                                <div class="text-[10px] sm:text-[11px] text-slate-500 font-medium">Gram (Kh)</div>
+                            </div>
+
+                            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-md transition-all duration-300">
+                                <div class="flex items-center space-x-1.5 text-teal-600 text-xs font-bold mb-1">
+                                    <i data-lucide="leaf" class="w-3.5 h-3.5"></i>
+                                    <span>Serat Pangan</span>
+                                </div>
+                                <div id="card-serat" class="text-xl sm:text-2xl font-black text-slate-900">0.00</div>
+                                <div class="text-[10px] sm:text-[11px] text-slate-500 font-medium">Gram (g)</div>
+                            </div>
+
+                            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-emerald-300 hover:shadow-md transition-all duration-300">
+                                <div class="flex items-center space-x-1.5 text-rose-600 text-xs font-bold mb-1">
+                                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                                    <span>Vitamin</span>
+                                </div>
+                                <div id="card-vitamin" class="text-xl sm:text-2xl font-black text-slate-900">0.00</div>
+                                <div class="text-[10px] sm:text-[11px] text-slate-500 font-medium">Milligram (mg)</div>
+                            </div>
+
+                        </div>
+
+                        <!-- Nutrition Comparison Bar Chart -->
+                        <div class="pt-3 border-t border-slate-100">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                                Grafis Makronutrisi (PB vs PK)
+                            </h4>
+                            <div class="h-48 sm:h-56 relative w-full">
+                                <canvas id="nutritionChart"></canvas>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Quality Assurance Banner -->
+                    <div class="p-5 rounded-3xl bg-slate-900 text-white space-y-3 shadow-lg reveal-on-scroll">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                                <i data-lucide="award" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-sm">Jaminan Standar Higiene & Kebersihan</h4>
+                                <p class="text-xs text-slate-400">Diawasi Tim Nutrisionis SPPG Bukit Kemuning 4</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-slate-300 space-y-1.5 pt-2 border-t border-slate-800">
+                            <li class="flex items-center space-x-2">
+                                <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                                <span>Bahan pangan segar lokal dari petani terpilih</span>
+                            </li>
+                            <li class="flex items-center space-x-2">
+                                <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                                <span>Bebas bahan pengawet & pewarna buatan</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section id="mode-admin" class="hidden py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+            
+            <!-- Admin Top Banner -->
+            <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 reveal-on-scroll">
+                <div class="flex items-center space-x-4">
+                    <div class="p-3 bg-amber-50 rounded-2xl text-amber-600">
+                        <i data-lucide="shield-check" class="w-7 h-7"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h2 class="text-xl font-bold text-slate-900">Panel Kelola Menu & Nilai Gizi SPPG</h2>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">Tergembok SPPGBK4</span>
+                        </div>
+                        <p class="text-xs text-slate-500">
+                            Kelola postingan foto sajian (maksimal 5 foto), rincian menu porsi besar/kecil, dan angka gizi
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Admin Action Buttons -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="resetToDefaultData()" class="inline-flex items-center space-x-2 px-3.5 py-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold transition-all">
+                        <i data-lucide="eraser" class="w-4 h-4 text-slate-500"></i>
+                        <span>Kosongkan Semua Input</span>
+                    </button>
+                    <button onclick="lockAdmin()" class="inline-flex items-center space-x-2 px-3.5 py-2.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-bold transition-all">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                        <span>Kunci / Keluar Admin</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SMART AUTO-PASTE PARSER BOX -->
+            <div class="bg-gradient-to-br from-amber-500/10 via-amber-50 to-orange-50/50 rounded-3xl p-6 border border-amber-200 space-y-4 reveal-on-scroll">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <div class="p-2 bg-amber-600 text-white rounded-xl">
+                            <i data-lucide="wand-2" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-extrabold text-slate-900 text-base">Copas Auto-Parser Magic Box</h3>
+                            <p class="text-xs text-slate-600">Tempel/Copas catatan teks mentah di bawah ini. System akan langsung mengisi kolom secara otomatis!</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold px-3 py-1 bg-amber-200 text-amber-900 rounded-full">
+                        Fitur Otomatisasi
+                    </span>
+                </div>
+
+                <div class="space-y-3">
+                    <textarea id="smart-paste-input" 
+                              rows="6" 
+                              placeholder="Copas teks di sini... Contoh:
+Nilai gizi menu Rabu, 30 Sept 2026
+Menu porsi besar : Nasi Putih + Ebi Furai + Tahu Balado...
+PB
+Energi : 573.11 kkal..."
+                              class="w-full p-4 text-xs font-mono bg-white rounded-2xl border border-amber-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-all text-slate-800 shadow-inner custom-scrollbar"
+                              oninput="processSmartPaste()"></textarea>
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between text-xs gap-2">
+                        <div class="text-slate-500 italic">
+                            💡 Cobalah menempelkan teks format WhatsApp/Catatan gizi harian di atas.
+                        </div>
+                        <button onclick="processSmartPaste()" class="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center space-x-2">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                            <span>Proses Teks Sekarang</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MANUAL INPUT FORM GRID -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <!-- Left: Form Controls (7 Cols) -->
+                <div class="lg:col-span-7 space-y-6">
+                    
+                    <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 reveal-slide-left">
+                        <h3 class="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center space-x-2">
+                            <i data-lucide="file-text" class="w-5 h-5 text-bgn-blue"></i>
+                            <span>1. Tanggal & Menu Makanan</span>
+                        </h3>
+
+                        <!-- Date Field -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Hari & Tanggal Menu</label>
+                            <input type="text" id="input-date" 
+                                   placeholder="Contoh: Rabu, 30 Sept 2026" 
+                                   class="w-full p-3 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-bgn-blue outline-none transition-all">
+                        </div>
+
+                        <!-- PB Menu Field -->
+                        <div>
+                            <label class="block text-xs font-bold text-emerald-800 mb-1">Menu Porsi Besar (PB)</label>
+                            <textarea id="input-menu-pb" rows="2" 
+                                      placeholder="Contoh: Nasi Putih + Ebi Furai + Tahu Balado + Tumis Labusiam + Buah Naga"
+                                      class="w-full p-3 rounded-xl border border-emerald-300 bg-emerald-50/20 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"></textarea>
+                        </div>
+
+                        <!-- PK Menu Field -->
+                        <div>
+                            <label class="block text-xs font-bold text-amber-800 mb-1">Menu Porsi Kecil (PK)</label>
+                            <textarea id="input-menu-pk" rows="2" 
+                                      placeholder="Contoh: Nasi putih + Ebi Furai + Tahu Kecap + Tumis Labusiam + Buah Naga"
+                                      class="w-full p-3 rounded-xl border border-amber-300 bg-amber-50/20 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Photo Uploader Section -->
+                    <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 reveal-slide-left delay-100">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+                                <i data-lucide="image" class="w-5 h-5 text-emerald-600"></i>
+                                <span>2. Kelola Foto Sajian (Maksimal 5 Foto)</span>
+                            </h3>
+                            <span id="admin-photo-count" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                                0 / 5
+                            </span>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <input type="url" id="input-photo-url" 
+                                       placeholder="Masukkan URL foto dari internet atau Google Drive..." 
+                                       class="flex-grow p-3 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
+                                <button onclick="addPhotoFromURL()" class="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1 shrink-0">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                    <span>Tambah URL</span>
+                                </button>
+                            </div>
+
+                            <!-- Drag & Drop Dropzone Box -->
+                            <div id="drop-zone" 
+                                 class="relative border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center transition-all bg-slate-50 cursor-pointer">
+                                <input type="file" id="file-upload-input" accept="image/*" multiple onchange="handleFileUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                                <div class="space-y-2 pointer-events-none">
+                                    <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto text-slate-400"></i>
+                                    <p class="text-xs font-bold text-slate-700">Drag & Drop Foto / Klik / Copas Gambar (Ctrl+V)</p>
+                                    <p class="text-[10px] text-slate-400">Format PNG, JPG, WebP • Otomatis Preview & Ratio 4:5 IG</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Admin Thumbnails List -->
+                        <div id="admin-photo-list" class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+                            <!-- Dynamically loaded -->
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right: Nutrition Form Grid (5 Cols) -->
+                <div class="lg:col-span-5 space-y-6">
+                    
+                    <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 reveal-slide-right">
+                        <h3 class="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center space-x-2">
+                            <i data-lucide="bar-chart-3" class="w-5 h-5 text-amber-600"></i>
+                            <span>3. Rincian Angka Nilai Gizi</span>
+                        </h3>
+
+                        <!-- PB Inputs -->
+                        <div class="space-y-3 p-4 bg-emerald-50/40 rounded-2xl border border-emerald-200">
+                            <div class="text-xs font-extrabold text-emerald-900 uppercase tracking-wider flex items-center justify-between">
+                                <span>Nilai Gizi Porsi Besar (PB)</span>
+                                <span class="text-[10px] text-emerald-700">Untuk Siswa Lanjutan</span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Energi (kkal)</label>
+                                    <input type="number" step="0.01" id="pb-energi" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Protein (g)</label>
+                                    <input type="number" step="0.01" id="pb-protein" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Lemak (g)</label>
+                                    <input type="number" step="0.01" id="pb-lemak" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Kh (g)</label>
+                                    <input type="number" step="0.01" id="pb-kh" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Serat (g)</label>
+                                    <input type="number" step="0.01" id="pb-serat" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Vitamin (mg)</label>
+                                    <input type="number" step="0.01" id="pb-vitamin" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PK Inputs -->
+                        <div class="space-y-3 p-4 bg-amber-50/40 rounded-2xl border border-amber-200">
+                            <div class="text-xs font-extrabold text-amber-900 uppercase tracking-wider flex items-center justify-between">
+                                <span>Nilai Gizi Porsi Kecil (PK)</span>
+                                <span class="text-[10px] text-amber-700">Untuk PAUD/SD Awal</span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Energi (kkal)</label>
+                                    <input type="number" step="0.01" id="pk-energi" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Protein (g)</label>
+                                    <input type="number" step="0.01" id="pk-protein" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Lemak (g)</label>
+                                    <input type="number" step="0.01" id="pk-lemak" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Kh (g)</label>
+                                    <input type="number" step="0.01" id="pk-kh" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Serat (g)</label>
+                                    <input type="number" step="0.01" id="pk-serat" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                                <div>
+                                    <label class="block font-semibold text-slate-600 mb-0.5">Vitamin (mg)</label>
+                                    <input type="number" step="0.01" id="pk-vitamin" value="" placeholder="0.00" class="w-full p-2 rounded-lg border border-slate-300 font-bold text-slate-800">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Save & Apply Changes Button -->
+                        <button onclick="saveAndApplyData()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl shadow-lg transition-all text-sm flex items-center justify-center space-x-2">
+                            <i data-lucide="check-circle" class="w-5 h-5"></i>
+                            <span>Simpan & Tampilkan ke Semua Device</span>
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <footer class="bg-slate-900 text-slate-400 py-10 border-t border-slate-800 text-xs no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-slate-800 pb-8">
+                <div class="flex items-center space-x-3 text-center md:text-left">
+                    <img src="https://www.bgn.go.id/logo-bgn.png" 
+                         alt="BGN Logo" 
+                         class="h-10 w-auto brightness-200"
+                         onerror="this.src='https://placehold.co/100x100/0f2942/ffffff?text=BGN'">
+                    <div>
+                        <div class="font-bold text-slate-200 text-base">Badan Gizi Nasional (BGN)</div>
+                        <div class="text-slate-400">SPPG Bukit Kemuning 4 • Program Makan Bergizi Gratis</div>
+                    </div>
+                </div>
+
+                <!-- Footer Social Media Section -->
+                <div class="flex flex-col sm:flex-row items-center gap-3">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Media Sosial Resmi:</span>
+                    <div class="flex items-center space-x-2">
+                        <a href="https://www.facebook.com/profile.php?id=61582040284295" target="_blank" rel="noopener noreferrer"
+                           class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white transition-all duration-200 flex items-center space-x-2 font-semibold border border-slate-700/60">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                            <span>Facebook</span>
+                        </a>
+                        <a href="https://www.instagram.com/sppg.bukitkemuning4?igsh=MXhpZHZkc3llbmwzcA==" target="_blank" rel="noopener noreferrer"
+                           class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-pink-600 text-slate-300 hover:text-white transition-all duration-200 flex items-center space-x-2 font-semibold border border-slate-700/60">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                            <span>Instagram</span>
+                        </a>
+                        <a href="https://www.tiktok.com/@sppg.bukitkemuning4?_r=1&_t=ZS-93ZDf1u7fV4" target="_blank" rel="noopener noreferrer"
+                           class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-cyan-600 text-slate-300 hover:text-white transition-all duration-200 flex items-center space-x-2 font-semibold border border-slate-700/60">
+                            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .56.04.83.12V9.37a6.32 6.32 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.63 6.34 6.34 0 0 0 9.34 22a6.34 6.34 0 0 0 6.34-6.34V9.05a8.28 8.28 0 0 0 4.91 1.58V7.17a4.83 4.83 0 0 1-1-.48z"/></svg>
+                            <span>TikTok</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center text-slate-500">
+                &copy; 2026 SPPG Bukit Kemuning 4. Dikelola untuk Pemenuhan Nutrisi Peserta Didik.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ================= STATE MANAGEMENT =================
+        let isAdminAuthenticated = false;
+
+        // Clean Empty Default State
+        const defaultState = {
+            date: "",
+            menuPB: "",
+            menuPK: "",
+            photos: [],
+            activePhotoIndex: 0,
+            activeNutritionPortion: 'PB',
+            pb: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 },
+            pk: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 }
+        };
+
+        let appData = { ...defaultState };
+        window.appData = appData;
+        let nutritionChart = null;
+
+        function switchMode(mode) {
+            if (mode === 'admin' && !isAdminAuthenticated) {
+                const modal = document.getElementById('admin-auth-modal');
+                if (modal) modal.classList.remove('hidden');
+                return;
+            }
+
+            const previewSection = document.getElementById('mode-preview');
+            const adminSection = document.getElementById('mode-admin');
+            const tabPreview = document.getElementById('tab-preview');
+            const tabAdmin = document.getElementById('tab-admin');
+
+            if (mode === 'preview') {
+                if (previewSection) previewSection.classList.remove('hidden');
+                if (adminSection) adminSection.classList.add('hidden');
+                if (tabPreview) {
+                    tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
+                }
+                if (tabAdmin) {
+                    tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
+                }
+            } else if (mode === 'admin') {
+                if (previewSection) previewSection.classList.add('hidden');
+                if (adminSection) adminSection.classList.remove('hidden');
+                if (tabAdmin) {
+                    tabAdmin.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm bg-white text-bgn-navy";
+                }
+                if (tabPreview) {
+                    tabPreview.className = "mode-tab flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all";
+                }
+                syncAdminInputs();
+            }
+        }
+
+        function handleAdminAuth(e) {
+            e.preventDefault();
+            const input = document.getElementById('admin-password-input').value;
+            const errorMsg = document.getElementById('admin-auth-error');
+            if (input === 'SPPGBK4') {
+                isAdminAuthenticated = true;
+                if (errorMsg) errorMsg.classList.add('hidden');
+                closeAdminAuthModal();
+                switchMode('admin');
+                document.getElementById('admin-password-input').value = '';
+                showToast("Berhasil Masuk Panel Admin SPPG!");
+            } else {
+                if (errorMsg) errorMsg.classList.remove('hidden');
+            }
+        }
+
+        function closeAdminAuthModal() {
+            const modal = document.getElementById('admin-auth-modal');
+            const errorMsg = document.getElementById('admin-auth-error');
+            if (modal) modal.classList.add('hidden');
+            if (errorMsg) errorMsg.classList.add('hidden');
+        }
+
+        function togglePasswordVisibility() {
+            const pwdInput = document.getElementById('admin-password-input');
+            if (!pwdInput) return;
+            pwdInput.type = pwdInput.type === 'password' ? 'text' : 'password';
+        }
+
+        function lockAdmin() {
+            isAdminAuthenticated = false;
+            switchMode('preview');
+            showToast("Sesi Admin Telah Dikunci");
+        }
+
+        window.syncAdminInputs = function() {
+            if (document.getElementById('input-date')) {
+                document.getElementById('input-date').value = appData.date || '';
+                document.getElementById('input-menu-pb').value = appData.menuPB || '';
+                document.getElementById('input-menu-pk').value = appData.menuPK || '';
+
+                document.getElementById('pb-energi').value = appData.pb.energi || '';
+                document.getElementById('pb-protein').value = appData.pb.protein || '';
+                document.getElementById('pb-lemak').value = appData.pb.lemak || '';
+                document.getElementById('pb-kh').value = appData.pb.kh || '';
+                document.getElementById('pb-serat').value = appData.pb.serat || '';
+                document.getElementById('pb-vitamin').value = appData.pb.vitamin || '';
+
+                document.getElementById('pk-energi').value = appData.pk.energi || '';
+                document.getElementById('pk-protein').value = appData.pk.protein || '';
+                document.getElementById('pk-lemak').value = appData.pk.lemak || '';
+                document.getElementById('pk-kh').value = appData.pk.kh || '';
+                document.getElementById('pk-serat').value = appData.pk.serat || '';
+                document.getElementById('pk-vitamin').value = appData.pk.vitamin || '';
+            }
+        };
+
+        function processSmartPaste() {
+            const rawText = document.getElementById('smart-paste-input').value;
+            if (!rawText.trim()) return;
+
+            const dateMatch = rawText.match(/(Rabu|Kamis|Jumat|Sabtu|Minggu|Senin|Selasa),\s*\d+\s+[A-Za-z]+\s+\d{4}/i) || 
+                              rawText.match(/Nilai gizi menu\s*([^\n\r]+)/i);
+            if (dateMatch) {
+                const extractedDate = dateMatch[1] ? dateMatch[1].trim() : dateMatch[0].trim();
+                appData.date = extractedDate;
+                document.getElementById('input-date').value = extractedDate;
+            }
+
+            const pbMenuMatch = rawText.match(/Menu porsi besar\s*:\s*([^\n\r]+)/i);
+            if (pbMenuMatch) {
+                appData.menuPB = pbMenuMatch[1].trim();
+                document.getElementById('input-menu-pb').value = appData.menuPB;
+            }
+
+            const pkMenuMatch = rawText.match(/Menu porsi kecil\s*:\s*([^\n\r]+)/i);
+            if (pkMenuMatch) {
+                appData.menuPK = pkMenuMatch[1].trim();
+                document.getElementById('input-menu-pk').value = appData.menuPK;
+            }
+
+            const pbIndex = rawText.search(/\bPB\b/i);
+            const pkIndex = rawText.search(/\bPK\b/i);
+
+            if (pbIndex !== -1 && pkIndex !== -1) {
+                const pbText = rawText.substring(pbIndex, pkIndex);
+                const pkText = rawText.substring(pkIndex);
+
+                parseNutrientsSection(pbText, 'pb');
+                parseNutrientsSection(pkText, 'pk');
+            } else {
+                parseNutrientsSection(rawText, 'pb');
+            }
+
+            saveAndApplyData();
+        }
+
+        function parseNutrientsSection(textBlock, targetKey) {
+            const energi = textBlock.match(/Energi\s*:\s*([\d.]+)/i);
+            const protein = textBlock.match(/Protein\s*:\s*([\d.]+)/i);
+            const lemak = textBlock.match(/Lemak\s*:\s*([\d.]+)/i);
+            const kh = textBlock.match(/Kh\s*:\s*([\d.]+)/i);
+            const serat = textBlock.match(/Serat\s*:\s*([\d.]+)/i);
+            const vitamin = textBlock.match(/Vitamin\s*:\s*([\d.]+)/i);
+
+            if (energi) appData[targetKey].energi = parseFloat(energi[1]);
+            if (protein) appData[targetKey].protein = parseFloat(protein[1]);
+            if (lemak) appData[targetKey].lemak = parseFloat(lemak[1]);
+            if (kh) appData[targetKey].kh = parseFloat(kh[1]);
+            if (serat) appData[targetKey].serat = parseFloat(serat[1]);
+            if (vitamin) appData[targetKey].vitamin = parseFloat(vitamin[1]);
+
+            document.getElementById(`${targetKey}-energi`).value = appData[targetKey].energi || '';
+            document.getElementById(`${targetKey}-protein`).value = appData[targetKey].protein || '';
+            document.getElementById(`${targetKey}-lemak`).value = appData[targetKey].lemak || '';
+            document.getElementById(`${targetKey}-kh`).value = appData[targetKey].kh || '';
+            document.getElementById(`${targetKey}-serat`).value = appData[targetKey].serat || '';
+            document.getElementById(`${targetKey}-vitamin`).value = appData[targetKey].vitamin || '';
+        }
+
+        function saveAndApplyData() {
+            appData.date = document.getElementById('input-date').value.trim();
+            appData.menuPB = document.getElementById('input-menu-pb').value.trim();
+            appData.menuPK = document.getElementById('input-menu-pk').value.trim();
+
+            appData.pb = {
+                energi: parseFloat(document.getElementById('pb-energi').value) || 0,
+                protein: parseFloat(document.getElementById('pb-protein').value) || 0,
+                lemak: parseFloat(document.getElementById('pb-lemak').value) || 0,
+                kh: parseFloat(document.getElementById('pb-kh').value) || 0,
+                serat: parseFloat(document.getElementById('pb-serat').value) || 0,
+                vitamin: parseFloat(document.getElementById('pb-vitamin').value) || 0
+            };
+
+            appData.pk = {
+                energi: parseFloat(document.getElementById('pk-energi').value) || 0,
+                protein: parseFloat(document.getElementById('pk-protein').value) || 0,
+                lemak: parseFloat(document.getElementById('pk-lemak').value) || 0,
+                kh: parseFloat(document.getElementById('pk-kh').value) || 0,
+                serat: parseFloat(document.getElementById('pk-serat').value) || 0,
+                vitamin: parseFloat(document.getElementById('pk-vitamin').value) || 0
+            };
+
+            renderAllViews();
+            updateChartData();
+
+            if (typeof window.saveToCloud === 'function') {
+                window.saveToCloud(appData).then((success) => {
+                    if (success) {
+                        showToast("Data Tersimpan & Tersinkron di Semua Device!");
+                    } else {
+                        showToast("Data Disimpan Lokal");
+                    }
+                });
+            } else {
+                showToast("Data Disimpan!");
+            }
+        }
+
+        function renderAllViews() {
+            if (document.getElementById('display-date-hero')) {
+                document.getElementById('display-date-hero').innerText = appData.date || "Belum Ada Tanggal";
+                document.getElementById('display-menu-pb').innerText = appData.menuPB || "Belum ada rincian menu porsi besar.";
+                document.getElementById('display-menu-pk').innerText = appData.menuPK || "Belum ada rincian menu porsi kecil.";
+
+                document.getElementById('badge-energi-pb').innerText = (appData.pb.energi || 0).toFixed(2);
+                document.getElementById('badge-protein-pb').innerText = (appData.pb.protein || 0).toFixed(2);
+
+                document.getElementById('pb-kalori-inline').innerText = `${(appData.pb.energi || 0).toFixed(2)} kkal`;
+                document.getElementById('pk-kalori-inline').innerText = `${(appData.pk.energi || 0).toFixed(2)} kkal`;
+            }
+
+            renderNutritionCards();
+            renderPhotos();
+        }
+
+        function setNutritionTab(portion) {
+            appData.activeNutritionPortion = portion;
+            const btnPB = document.getElementById('nutri-btn-pb');
+            const btnPK = document.getElementById('nutri-btn-pk');
+            const indicator = document.getElementById('active-portion-indicator');
+
+            if (portion === 'PB') {
+                btnPB.className = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white shadow-sm transition-all";
+                btnPK.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+                indicator.className = "p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900";
+                indicator.innerHTML = `<span class="flex items-center space-x-1.5"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>Menampilkan Data Gizi: PORSI BESAR (PB)</span></span>`;
+            } else {
+                btnPK.className = "px-3 py-1.5 rounded-lg bg-amber-600 text-white shadow-sm transition-all";
+                btnPB.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all";
+                indicator.className = "p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between text-xs font-bold text-amber-900";
+                indicator.innerHTML = `<span class="flex items-center space-x-1.5"><i data-lucide="check-circle-2" class="w-4 h-4 text-amber-600"></i><span>Menampilkan Data Gizi: PORSI KECIL (PK)</span></span>`;
+            }
+
+            if (window.lucide) lucide.createIcons();
+            renderNutritionCards();
+        }
+
+        function renderNutritionCards() {
+            const current = appData.activeNutritionPortion === 'PB' ? appData.pb : appData.pk;
+            
+            if (document.getElementById('card-energi')) {
+                document.getElementById('card-energi').innerText = (current.energi || 0).toFixed(2);
+                document.getElementById('card-protein').innerText = (current.protein || 0).toFixed(2);
+                document.getElementById('card-lemak').innerText = (current.lemak || 0).toFixed(2);
+                document.getElementById('card-kh').innerText = (current.kh || 0).toFixed(2);
+                document.getElementById('card-serat').innerText = (current.serat || 0).toFixed(2);
+                document.getElementById('card-vitamin').innerText = (current.vitamin || 0).toFixed(2);
+            }
+        }
+
+        function renderPhotos() {
+            if (!appData.photos) appData.photos = [];
+            const count = appData.photos.length;
+
+            if (document.getElementById('photo-count-badge')) {
+                document.getElementById('photo-count-badge').innerText = `${count} / 5 Foto`;
+                document.getElementById('admin-photo-count').innerText = `${count} / 5`;
+            }
+
+            const mainPhoto = document.getElementById('main-active-photo');
+            const mainEmpty = document.getElementById('main-photo-empty');
+            const mainOverlay = document.getElementById('main-photo-overlay');
+            const mainCaptionBox = document.getElementById('main-photo-caption-box');
+            const btnPrev = document.getElementById('btn-prev-photo');
+            const btnNext = document.getElementById('btn-next-photo');
+
+            if (count > 0) {
+                if (appData.activePhotoIndex >= count) appData.activePhotoIndex = 0;
+                const activeUrl = appData.photos[appData.activePhotoIndex];
+
+                if (mainPhoto) {
+                    mainPhoto.src = activeUrl;
+                    mainPhoto.classList.remove('hidden');
+                }
+                if (mainEmpty) mainEmpty.classList.add('hidden');
+                if (mainOverlay) mainOverlay.classList.remove('hidden');
+                if (mainCaptionBox) mainCaptionBox.classList.remove('hidden');
+
+                if (count > 1) {
+                    if (btnPrev) btnPrev.classList.remove('hidden');
+                    if (btnNext) btnNext.classList.remove('hidden');
+                } else {
+                    if (btnPrev) btnPrev.classList.add('hidden');
+                    if (btnNext) btnNext.classList.add('hidden');
+                }
+            } else {
+                if (mainPhoto) mainPhoto.classList.add('hidden');
+                if (mainEmpty) mainEmpty.classList.remove('hidden');
+                if (mainOverlay) mainOverlay.classList.add('hidden');
+                if (mainCaptionBox) mainCaptionBox.classList.add('hidden');
+                if (btnPrev) btnPrev.classList.add('hidden');
+                if (btnNext) btnNext.classList.add('hidden');
+            }
+
+            const thumbBox = document.getElementById('thumbnails-container');
+            if (thumbBox) {
+                thumbBox.innerHTML = '';
+                appData.photos.forEach((photoUrl, index) => {
+                    const isSelected = index === appData.activePhotoIndex;
+                    const thumb = document.createElement('div');
+                    thumb.className = `h-14 sm:h-16 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
+                        isSelected ? 'border-emerald-600 scale-105 shadow-sm' : 'border-transparent opacity-60 hover:opacity-100'
+                    }`;
+                    thumb.onclick = () => {
+                        appData.activePhotoIndex = index;
+                        renderPhotos();
+                    };
+                    thumb.innerHTML = `<img src="${photoUrl}" class="w-full h-full object-cover">`;
+                    thumbBox.appendChild(thumb);
+                });
+            }
+
+            const adminBox = document.getElementById('admin-photo-list');
+            if (adminBox) {
+                adminBox.innerHTML = '';
+                appData.photos.forEach((photoUrl, index) => {
+                    const adminItem = document.createElement('div');
+                    adminItem.className = 'relative group h-20 rounded-xl overflow-hidden border border-slate-200';
+                    adminItem.innerHTML = `
+                        <img src="${photoUrl}" class="w-full h-full object-cover">
+                        <button onclick="removePhoto(${index})" class="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-80 group-hover:opacity-100 transition-all shadow-md">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    `;
+                    adminBox.appendChild(adminItem);
+                });
+            }
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function addPhotoFromURL() {
+            const urlInput = document.getElementById('input-photo-url');
+            const url = urlInput.value.trim();
+            if (!url) return;
+
+            if (appData.photos.length >= 5) {
+                showToast("Batas Maksimal 5 Foto Telah Tercapai!");
+                return;
+            }
+
+            appData.photos.push(url);
+            urlInput.value = '';
+            renderPhotos();
+            showToast("Foto Berhasil Ditambahkan!");
+        }
+
+        function handleFileUpload(event) {
+            const files = event.target ? event.target.files : event;
+            if (!files || !files.length) return;
+
+            for (let i = 0; i < files.length; i++) {
+                if (appData.photos.length >= 5) {
+                    showToast("Batas Maksimal 5 Foto!");
+                    break;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    appData.photos.push(e.target.result);
+                    renderPhotos();
+                };
+                reader.readAsDataURL(files[i]);
+            }
+        }
+
+        function removePhoto(index) {
+            appData.photos.splice(index, 1);
+            if (appData.activePhotoIndex >= appData.photos.length) {
+                appData.activePhotoIndex = Math.max(0, appData.photos.length - 1);
+            }
+            renderPhotos();
+            showToast("Foto Dihapus");
+        }
+
+        function prevPhoto() {
+            if (appData.photos.length === 0) return;
+            appData.activePhotoIndex = (appData.activePhotoIndex - 1 + appData.photos.length) % appData.photos.length;
+            renderPhotos();
+        }
+
+        function nextPhoto() {
+            if (appData.photos.length === 0) return;
+            appData.activePhotoIndex = (appData.activePhotoIndex + 1) % appData.photos.length;
+            renderPhotos();
+        }
+
+        function initDragAndDropAndPaste() {
+            const dropZone = document.getElementById('drop-zone');
+            if (!dropZone) return;
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.add('drag-active');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('drag-active');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    handleFileUpload(files);
+                }
+            }, false);
+
+            document.addEventListener('paste', (e) => {
+                if (!isAdminAuthenticated) return;
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                for (let index in items) {
+                    const item = items[index];
+                    if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        const blob = item.getAsFile();
+                        handleFileUpload([blob]);
+                        showToast("Gambar dari Clipboard Berhasil Diupload!");
+                    }
+                }
+            });
+        }
+
+        function openLightboxModal() {
+            if (!appData.photos || appData.photos.length === 0) return;
+            const modal = document.getElementById('photo-lightbox-modal');
+            const img = document.getElementById('lightbox-modal-img');
+            if (modal && img) {
+                img.src = appData.photos[appData.activePhotoIndex];
+                modal.classList.remove('hidden');
+            }
+        }
+
+        function closeLightboxModal() {
+            const modal = document.getElementById('photo-lightbox-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function setLightboxAspect(aspect) {
+            const container = document.getElementById('lightbox-aspect-container');
+            const btn45 = document.getElementById('aspect-btn-45');
+            const btn169 = document.getElementById('aspect-btn-169');
+            
+            if (aspect === '4:5') {
+                container.className = "relative w-full max-w-md aspect-instagram bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex items-center justify-center transition-all";
+                btn45.className = "px-3 py-1 rounded-lg bg-emerald-600 text-white font-bold";
+                btn169.className = "px-3 py-1 rounded-lg bg-slate-800 text-slate-300 font-bold hover:bg-slate-700";
+            } else {
+                container.className = "relative w-full max-w-2xl aspect-[16/9] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex items-center justify-center transition-all";
+                btn169.className = "px-3 py-1 rounded-lg bg-emerald-600 text-white font-bold";
+                btn45.className = "px-3 py-1 rounded-lg bg-slate-800 text-slate-300 font-bold hover:bg-slate-700";
+            }
+        }
+
+        function initNutritionChart() {
+            const chartCanvas = document.getElementById('nutritionChart');
+            if (!chartCanvas) return;
+            const ctx = chartCanvas.getContext('2d');
+            nutritionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Protein (g)', 'Lemak (g)', 'Kh (g)', 'Serat (g)', 'Vit (mg)'],
+                    datasets: [
+                        {
+                            label: 'Porsi Besar (PB)',
+                            data: [appData.pb.protein, appData.pb.lemak, appData.pb.kh, appData.pb.serat, appData.pb.vitamin],
+                            backgroundColor: 'rgba(5, 150, 105, 0.85)',
+                            borderColor: '#059669',
+                            borderWidth: 1.5,
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Porsi Kecil (PK)',
+                            data: [appData.pk.protein, appData.pk.lemak, appData.pk.kh, appData.pk.serat, appData.pk.vitamin],
+                            backgroundColor: 'rgba(217, 119, 6, 0.85)',
+                            borderColor: '#d97706',
+                            borderWidth: 1.5,
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { font: { family: 'Plus Jakarta Sans', size: 10, weight: 'bold' } }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function updateChartData() {
+            if (!nutritionChart) return;
+            nutritionChart.data.datasets[0].data = [
+                appData.pb.protein || 0, appData.pb.lemak || 0, appData.pb.kh || 0, appData.pb.serat || 0, appData.pb.vitamin || 0
+            ];
+            nutritionChart.data.datasets[1].data = [
+                appData.pk.protein || 0, appData.pk.lemak || 0, appData.pk.kh || 0, appData.pk.serat || 0, appData.pk.vitamin || 0
+            ];
+            nutritionChart.update();
+        }
+
+        function resetToDefaultData() {
+            appData = {
+                date: "",
+                menuPB: "",
+                menuPK: "",
+                photos: [],
+                activePhotoIndex: 0,
+                activeNutritionPortion: 'PB',
+                pb: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 },
+                pk: { energi: 0, protein: 0, lemak: 0, kh: 0, serat: 0, vitamin: 0 }
+            };
+            syncAdminInputs();
+            renderAllViews();
+            updateChartData();
+            showToast("Semua Input Berhasil Dikosongkan!");
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-6 right-6 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-xs font-bold flex items-center space-x-2 z-[130] border border-slate-700 animate-bounce';
+            toast.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i><span>${message}</span>`;
+            document.body.appendChild(toast);
+            if (window.lucide) lucide.createIcons();
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function initScrollObserver() {
+            const observerOptions = {
+                root: null,
+                rootMargin: '0px',
+                threshold: 0.05
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                    }
+                });
+            }, observerOptions);
+
+            const revealElements = document.querySelectorAll('.reveal-on-scroll, .reveal-slide-left, .reveal-slide-right');
+            revealElements.forEach(el => observer.observe(el));
+        }
+
+        // Startup Handler
+        window.addEventListener('DOMContentLoaded', () => {
+            renderAllViews();
+            initNutritionChart();
+            initDragAndDropAndPaste();
+            if (window.lucide) lucide.createIcons();
+            initScrollObserver();
+
+            window.addEventListener('scroll', () => {
+                const header = document.getElementById('main-header');
+                if (header) {
+                    if (window.scrollY > 20) {
+                        header.classList.add('shadow-md', 'bg-white/95');
+                    } else {
+                        header.classList.remove('shadow-md');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
