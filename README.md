@@ -1,39 +1,19 @@
-# SPPG Bukit Kemuning 4 — GitHub Pages + Firebase
+# SPPG Bukit Kemuning 4 — GitHub + Firebase
 
-## Login Admin
-Website menggunakan Firebase Authentication **Email/Password**.
-Tidak menggunakan OTP, Cloud Functions, SMTP, atau billing Blaze.
+Login admin menggunakan Firebase Authentication Email/Password.
 
-## Struktur admin
-Firestore collection:
+## Firebase
+- Project: sppg-bukit-kemuning-4-menu
+- Authentication: Email/Password
+- Firestore: collection `adminEmails`
+- Dokumen admin pertama:
+  - ID: `sppgbukitkemuning4@gmail.com`
+  - field `email` (string): `sppgbukitkemuning4@gmail.com`
 
-`adminEmails`
+## Firestore Rules
+Gunakan `firestore.rules` pada Firebase Console lalu klik Publish.
 
-Contoh document:
-
-- Document ID: `sppgbukitkemuning4@gmail.com`
-- Field `email`: `sppgbukitkemuning4@gmail.com` (string)
-
-Email yang sudah terdaftar di `adminEmails` dapat login dan mengelola menu serta email admin lain.
-
-## Firebase Authentication
-Aktifkan:
-
-Authentication → Sign-in method → Email/Password → Enable
-
-Buat user admin pada tab Authentication → Users.
-
-Email user harus sama dengan email pada `adminEmails`.
-
-## Firestore
-Gunakan `firestore.rules` pada folder ini, atau salin rules tersebut ke Firebase Console → Firestore Database → Rules → Publish.
-
-## Storage
-Gunakan `storage.rules` agar upload foto menu hanya dapat dilakukan oleh admin yang terdaftar.
+Aturan membolehkan akun login membaca dokumen admin miliknya sendiri, sementara daftar seluruh admin hanya dapat dibaca oleh admin yang sudah terverifikasi.
 
 ## GitHub Pages
-Upload `index.html` ke root repository dan pastikan GitHub Pages menggunakan branch `main` dan folder `/root`.
-
-## Firebase config
-Konfigurasi Firebase Web App sudah dimasukkan ke `index.html`.
-Jangan memasukkan password Gmail, service account key, atau credential server ke GitHub.
+Upload `index.html` ke repository GitHub Pages dan pastikan nama file tepat `index.html`.
