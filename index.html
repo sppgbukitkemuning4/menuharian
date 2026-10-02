@@ -38,7 +38,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
 
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -682,14 +681,12 @@ Energi : 560.05 kkal
         let isFirebaseConfigured = false;
         let auth = null;
         let db = null;
-        let storage = null;
 
         if (firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY" && firebaseConfig.projectId !== "YOUR_FIREBASE_PROJECT_ID") {
             try {
                 firebase.initializeApp(firebaseConfig);
                 auth = firebase.auth();
                 db = firebase.firestore();
-                storage = firebase.storage();
                 isFirebaseConfigured = true;
 
                 auth.onAuthStateChanged(async (user) => {
@@ -952,26 +949,73 @@ Energi : 560.05 kkal
         function handleFileSelect(e) {
             if (e.target.files && e.target.files[0]) processUploadedFile(e.target.files[0]);
         }
-        function processUploadedFile(file) {
+        async function processUploadedFile(file) {
             if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
                 showToast('❌ Format foto harus JPG, PNG, atau WEBP.', 'error');
                 return;
             }
             if (file.size > 5 * 1024 * 1024) {
-                showToast('❌ Ukuran foto maksimal 5MB.', 'error');
+                showToast('❌ Ukuran foto asli maksimal 5MB.', 'error');
                 return;
             }
-            state.selectedFile = file;
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                state.selectedFileBase64 = e.target.result;
-                document.getElementById('previewImageTag').src = e.target.result;
-                document.getElementById('previewFileName').innerText = `${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+            try {
+                showToast('⏳ Mengoptimalkan foto...', 'success');
+                const compressedDataUrl = await compressImageForFirestore(file);
+                state.selectedFile = file;
+                state.selectedFileBase64 = compressedDataUrl;
+                document.getElementById('previewImageTag').src = compressedDataUrl;
+                document.getElementById('previewFileName').innerText = `${file.name} • otomatis dioptimalkan`;
                 document.getElementById('dropzonePrompt').classList.add('hidden');
                 document.getElementById('imagePreviewBox').classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
+                showToast('✅ Foto siap disimpan ke Firebase.', 'success');
+            } catch (err) {
+                console.error(err);
+                state.selectedFile = null;
+                state.selectedFileBase64 = null;
+                showToast('❌ Foto gagal diproses. Coba JPG/PNG yang lebih kecil.', 'error');
+            }
         }
+
+        function compressImageForFirestore(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(new Error('File tidak dapat dibaca.'));
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onerror = () => reject(new Error('File gambar tidak valid.'));
+                    img.onload = () => {
+                        let width = img.naturalWidth;
+                        let height = img.naturalHeight;
+                        const maxDimension = 1400;
+                        const scale = Math.min(1, maxDimension / Math.max(width, height));
+                        width = Math.max(1, Math.round(width * scale));
+                        height = Math.max(1, Math.round(height * scale));
+
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d', { alpha: false });
+                        if (!ctx) return reject(new Error('Canvas tidak tersedia.'));
+
+                        let dataUrl = '';
+                        for (let attempt = 0; attempt < 5; attempt++) {
+                            canvas.width = width;
+                            canvas.height = height;
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, width, height);
+                            ctx.drawImage(img, 0, 0, width, height);
+                            dataUrl = canvas.toDataURL('image/jpeg', attempt === 0 ? 0.78 : 0.68);
+                            if (dataUrl.length <= 900000) break;
+                            width = Math.max(600, Math.round(width * 0.82));
+                            height = Math.max(600, Math.round(height * 0.82));
+                        }
+                        if (dataUrl.length > 950000) return reject(new Error('Foto masih terlalu besar.'));
+                        resolve(dataUrl);
+                    };
+                    img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
         function clearPhoto() {
             state.selectedFile = null;
             state.selectedFileBase64 = null;
@@ -987,7 +1031,9 @@ Energi : 560.05 kkal
                     const snapshot = await db.collection('menus').orderBy('tanggal', 'desc').get();
                     state.menus = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } catch (err) {
-                    loadLocalMenus();
+                    console.error('Firestore read error:', err);
+                    state.menus = [];
+                    showToast('❌ Gagal membaca menu dari Firebase.', 'error');
                 }
             } else {
                 loadLocalMenus();
@@ -1005,47 +1051,17 @@ Energi : 560.05 kkal
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.menus));
         }
 
-        async function requireAdminAccess() {
-            if (!isFirebaseConfigured || !auth || !db) {
-                throw new Error('Firebase belum terhubung.');
-            }
-
-            const user = auth.currentUser;
-            if (!user || !user.email) {
-                throw new Error('Sesi admin tidak aktif. Silakan login kembali.');
-            }
-
-            const email = user.email.trim().toLowerCase();
-            const adminDoc = await db.collection('adminEmails').doc(email).get();
-            if (!adminDoc.exists || (adminDoc.data().email || '').trim().toLowerCase() !== email) {
-                throw new Error('Akun ini bukan admin terdaftar.');
-            }
-
-            state.currentUser = {
-                uid: user.uid,
-                email: user.email
-            };
-            return user;
-        }
-
         async function handleSaveMenu(e) {
             e.preventDefault();
             const saveBtn = document.getElementById('saveMenuBtn');
-            if (saveBtn) saveBtn.disabled = true;
+            saveBtn.disabled = true;
 
             try {
-                // PERUBAHAN DATA HANYA BOLEH DILAKUKAN DARI SESI ADMIN.
-                await requireAdminAccess();
-
-                const editingId = document.getElementById('editingMenuId').value.trim();
+                const editingId = document.getElementById('editingMenuId').value;
                 const tanggal = document.getElementById('inputTanggal').value;
                 const status = document.getElementById('inputStatus').value;
                 const namaMenu = document.getElementById('inputNamaMenu').value.trim();
                 const deskripsi = document.getElementById('inputDeskripsi').value.trim();
-
-                if (!tanggal || !namaMenu) {
-                    throw new Error('Tanggal dan nama menu wajib diisi.');
-                }
 
                 const komponen = parseComponentsFromMenuName(namaMenu);
                 const gizi = {
@@ -1067,77 +1083,54 @@ Energi : 560.05 kkal
                     }
                 };
 
-                const existing = editingId
-                    ? state.menus.find(m => m.id === editingId)
-                    : null;
-
-                let finalPhotoUrl = existing?.fotoUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80';
-
-                // Foto baru hanya diunggah ke Firebase Storage dari Panel Admin.
-                if (state.selectedFile) {
-                    if (!storage) throw new Error('Firebase Storage belum terhubung.');
-
-                    const safeName = state.selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-                    const filePath = `menu-images/${Date.now()}-${safeName}`;
-                    const storageRef = storage.ref(filePath);
-                    const uploadTask = await storageRef.put(state.selectedFile, {
-                        contentType: state.selectedFile.type,
-                        customMetadata: {
-                            uploadedBy: auth.currentUser.email,
-                            menuDate: tanggal
-                        }
-                    });
-                    finalPhotoUrl = await uploadTask.ref.getDownloadURL();
+                let finalPhotoUrl = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80';
+                if (editingId) {
+                    const existing = state.menus.find(m => m.id === editingId);
+                    if (existing) finalPhotoUrl = existing.fotoUrl;
                 }
 
+                // Firebase Spark: foto disimpan sebagai data URL yang sudah dikompres di browser.
+                if (state.selectedFileBase64) finalPhotoUrl = state.selectedFileBase64;
+
                 const menuPayload = {
-                    tanggal,
-                    namaMenu,
-                    deskripsi,
-                    komponen,
-                    fotoUrl: finalPhotoUrl,
-                    gizi,
-                    status,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedBy: auth.currentUser.email
+                    tanggal, namaMenu, deskripsi, komponen,
+                    fotoUrl: finalPhotoUrl, gizi, status,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
+
+                if (!isFirebaseConfigured || !db || !state.currentUser) {
+                    throw new Error('Firebase/database admin belum terhubung.');
+                }
 
                 if (editingId) {
                     await db.collection('menus').doc(editingId).update(menuPayload);
-                    showToast('✅ Menu berhasil diperbarui di Firebase.', 'success');
+                    showToast('✅ Menu berhasil diperbarui!', 'success');
                 } else {
                     menuPayload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                    menuPayload.createdBy = auth.currentUser.email;
                     await db.collection('menus').add(menuPayload);
-                    showToast('✅ Menu baru berhasil disimpan ke Firebase.', 'success');
+                    showToast('✅ Menu baru berhasil disimpan!', 'success');
                 }
 
                 closeMenuForm();
-                clearPhoto();
                 await fetchAllMenus();
 
             } catch (err) {
-                console.error('CRUD SAVE ERROR:', err);
-                showToast(`❌ ${err.message || 'Gagal menyimpan menu ke Firebase.'}`, 'error');
+                showToast('❌ Gagal menyimpan menu.', 'error');
             } finally {
-                if (saveBtn) saveBtn.disabled = false;
+                saveBtn.disabled = false;
             }
         }
 
         async function deleteMenu(menuId) {
             openConfirmModal("Konfirmasi Hapus Menu", "Apakah Anda yakin ingin menghapus data menu ini?", async () => {
                 try {
-                    // PERUBAHAN DATA HANYA BOLEH DILAKUKAN DARI SESI ADMIN.
-                    await requireAdminAccess();
-
-                    if (!menuId) throw new Error('ID menu tidak ditemukan.');
-
+                    if (!db || !state.currentUser) throw new Error('Sesi admin tidak aktif.');
                     await db.collection('menus').doc(menuId).delete();
-                    showToast('✅ Menu berhasil dihapus dari Firebase.', 'success');
+                    showToast('✅ Menu dihapus.', 'success');
                     await fetchAllMenus();
                 } catch (err) {
-                    console.error('CRUD DELETE ERROR:', err);
-                    showToast(`❌ ${err.message || 'Gagal menghapus menu dari Firebase.'}`, 'error');
+                    console.error(err);
+                    showToast('❌ Gagal menghapus menu.', 'error');
                 }
             });
         }
