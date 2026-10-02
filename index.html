@@ -277,57 +277,47 @@
 
         <div id="adminView" class="hidden min-h-screen bg-slate-100 py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
             
-            <!-- ADMIN LOGIN SECTION (EMAIL & PASSWORD) -->
+            <!-- ADMIN LOGIN SECTION (FIREBASE EMAIL LINK) -->
             <div id="adminLoginSection" class="max-w-md mx-auto pt-6 sm:pt-12">
                 <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 space-y-6">
                     <div class="text-center space-y-2">
                         <div class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center mx-auto shadow-md p-2">
                             <img src="https://www.bgn.go.id/logo-bgn.png" alt="BGN Admin Logo" class="max-h-full max-w-full object-contain">
                         </div>
-                        <h2 class="text-xl sm:text-2xl font-black text-bgn-navy">Login Admin</h2>
-                        <p class="text-slate-500 text-xs">Masuk menggunakan email dan password akun admin yang telah terdaftar.</p>
+                        <h2 class="text-xl sm:text-2xl font-black text-bgn-navy">Login Admin SSO</h2>
+                        <p class="text-slate-500 text-xs">Masukkan email admin. Tautan login aman akan dikirim ke email yang memiliki akses.</p>
                     </div>
 
                     <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 space-y-2">
                         <div class="flex items-center space-x-2 font-bold text-bgn-navy">
                             <i data-lucide="shield-check" class="w-4 h-4 text-bgn-green shrink-0"></i>
-                            <span>Akses Admin Terproteksi</span>
+                            <span>Login Aman Tanpa Password</span>
                         </div>
                         <p class="text-slate-600 leading-relaxed text-[11px]">
-                            Gunakan email dan password Firebase Authentication. Hanya akun yang juga memiliki izin pada database admin yang dapat membuka panel pengelola.
+                            Email admin tidak ditampilkan di halaman login. Firebase akan mengirim tautan login satu kali ke email yang memiliki akses.
                         </p>
                     </div>
 
-                    <form id="ssoLoginForm" onsubmit="handleEmailPasswordLogin(event)" class="space-y-4">
+                    <form id="ssoLoginForm" onsubmit="handleSSOManualSubmit(event)" class="space-y-3">
                         <div>
                             <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Email</label>
                             <input type="email" id="ssoEmailInput" required autocomplete="email"
                                    placeholder="Masukkan email Anda"
                                    class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-bgn-navy text-sm outline-none">
+                            <p class="mt-2 text-[10px] text-slate-400">Tautan login hanya dapat digunakan oleh email yang terdaftar sebagai admin.</p>
                         </div>
 
-                        <div>
-                            <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Password</label>
-                            <div class="relative">
-                                <input type="password" id="ssoPasswordInput" required minlength="6" autocomplete="current-password"
-                                       placeholder="Masukkan password"
-                                       class="w-full px-4 py-3 pr-12 rounded-xl border border-slate-300 focus:ring-2 focus:ring-bgn-navy text-sm outline-none">
-                                <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-bgn-navy" aria-label="Tampilkan password">
-                                    <i id="passwordEyeIcon" data-lucide="eye" class="w-5 h-5"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <button type="submit" id="loginEmailPasswordBtn"
+                        <button type="submit" id="sendLoginLinkBtn"
                                 class="w-full bg-bgn-navy hover:bg-bgn-light text-white font-bold py-3.5 rounded-xl shadow-md transition-colors flex items-center justify-center space-x-2 text-sm active:scale-95">
-                            <i data-lucide="log-in" class="w-4 h-4"></i>
-                            <span>Masuk</span>
-                        </button>
-
-                        <button type="button" onclick="resetAdminPassword()" class="w-full text-xs font-semibold text-bgn-navy hover:underline">
-                            Lupa password?
+                            <i data-lucide="mail" class="w-4 h-4"></i>
+                            <span>Kirim Link Login</span>
                         </button>
                     </form>
+
+                    <div id="emailLinkNotice" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-[11px] text-emerald-900 hidden">
+                        <div class="font-bold flex items-center gap-2"><i data-lucide="mail-check" class="w-4 h-4"></i>Link login dikirim</div>
+                        <p class="mt-1 leading-relaxed">Periksa Inbox/Spam email Anda, lalu klik tautan login. Setelah berhasil, halaman ini akan membuka Panel Admin.</p>
+                    </div>
 
                     <div class="text-center pt-2">
                         <button onclick="showPublicView()" class="text-xs font-semibold text-slate-500 hover:text-bgn-navy flex items-center justify-center space-x-1 mx-auto">
@@ -710,7 +700,7 @@ Energi : 560.05 kkal
                             await auth.signOut();
                             state.currentUser = null;
                             if (state.currentView === 'admin') {
-                                showToast('❌ Email ini belum memiliki akses admin atau Firestore Rules belum sesuai.', 'error');
+                                showToast('❌ Email ini belum memiliki akses admin.', 'error');
                                 renderApp();
                             }
                             return;
@@ -729,6 +719,10 @@ Energi : 560.05 kkal
                     }
                 });
 
+                // Jika halaman dibuka dari link login Firebase, selesaikan autentikasi di sini.
+                if (auth.isSignInWithEmailLink(window.location.href)) {
+                    setTimeout(() => completeEmailLinkLogin(), 0);
+                }
             } catch (err) {
                 console.warn("Firebase init error:", err);
             }
@@ -1011,17 +1005,47 @@ Energi : 560.05 kkal
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.menus));
         }
 
+        async function requireAdminAccess() {
+            if (!isFirebaseConfigured || !auth || !db) {
+                throw new Error('Firebase belum terhubung.');
+            }
+
+            const user = auth.currentUser;
+            if (!user || !user.email) {
+                throw new Error('Sesi admin tidak aktif. Silakan login kembali.');
+            }
+
+            const email = user.email.trim().toLowerCase();
+            const adminDoc = await db.collection('adminEmails').doc(email).get();
+            if (!adminDoc.exists || (adminDoc.data().email || '').trim().toLowerCase() !== email) {
+                throw new Error('Akun ini bukan admin terdaftar.');
+            }
+
+            state.currentUser = {
+                uid: user.uid,
+                email: user.email
+            };
+            return user;
+        }
+
         async function handleSaveMenu(e) {
             e.preventDefault();
             const saveBtn = document.getElementById('saveMenuBtn');
-            saveBtn.disabled = true;
+            if (saveBtn) saveBtn.disabled = true;
 
             try {
-                const editingId = document.getElementById('editingMenuId').value;
+                // PERUBAHAN DATA HANYA BOLEH DILAKUKAN DARI SESI ADMIN.
+                await requireAdminAccess();
+
+                const editingId = document.getElementById('editingMenuId').value.trim();
                 const tanggal = document.getElementById('inputTanggal').value;
                 const status = document.getElementById('inputStatus').value;
                 const namaMenu = document.getElementById('inputNamaMenu').value.trim();
                 const deskripsi = document.getElementById('inputDeskripsi').value.trim();
+
+                if (!tanggal || !namaMenu) {
+                    throw new Error('Tanggal dan nama menu wajib diisi.');
+                }
 
                 const komponen = parseComponentsFromMenuName(namaMenu);
                 const gizi = {
@@ -1043,61 +1067,77 @@ Energi : 560.05 kkal
                     }
                 };
 
-                let finalPhotoUrl = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80';
-                if (editingId) {
-                    const existing = state.menus.find(m => m.id === editingId);
-                    if (existing) finalPhotoUrl = existing.fotoUrl;
-                }
+                const existing = editingId
+                    ? state.menus.find(m => m.id === editingId)
+                    : null;
 
+                let finalPhotoUrl = existing?.fotoUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80';
+
+                // Foto baru hanya diunggah ke Firebase Storage dari Panel Admin.
                 if (state.selectedFile) {
                     if (!storage) throw new Error('Firebase Storage belum terhubung.');
+
                     const safeName = state.selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-                    const storageRef = storage.ref(`menu-images/${Date.now()}-${safeName}`);
-                    const uploadTask = await storageRef.put(state.selectedFile);
+                    const filePath = `menu-images/${Date.now()}-${safeName}`;
+                    const storageRef = storage.ref(filePath);
+                    const uploadTask = await storageRef.put(state.selectedFile, {
+                        contentType: state.selectedFile.type,
+                        customMetadata: {
+                            uploadedBy: auth.currentUser.email,
+                            menuDate: tanggal
+                        }
+                    });
                     finalPhotoUrl = await uploadTask.ref.getDownloadURL();
-                } else if (state.selectedFileBase64) {
-                    finalPhotoUrl = state.selectedFileBase64;
                 }
 
                 const menuPayload = {
-                    tanggal, namaMenu, deskripsi, komponen,
-                    fotoUrl: finalPhotoUrl, gizi, status,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    tanggal,
+                    namaMenu,
+                    deskripsi,
+                    komponen,
+                    fotoUrl: finalPhotoUrl,
+                    gizi,
+                    status,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: auth.currentUser.email
                 };
-
-                if (!isFirebaseConfigured || !db || !state.currentUser) {
-                    throw new Error('Firebase/database admin belum terhubung.');
-                }
 
                 if (editingId) {
                     await db.collection('menus').doc(editingId).update(menuPayload);
-                    showToast('✅ Menu berhasil diperbarui!', 'success');
+                    showToast('✅ Menu berhasil diperbarui di Firebase.', 'success');
                 } else {
                     menuPayload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    menuPayload.createdBy = auth.currentUser.email;
                     await db.collection('menus').add(menuPayload);
-                    showToast('✅ Menu baru berhasil disimpan!', 'success');
+                    showToast('✅ Menu baru berhasil disimpan ke Firebase.', 'success');
                 }
 
                 closeMenuForm();
+                clearPhoto();
                 await fetchAllMenus();
 
             } catch (err) {
-                showToast('❌ Gagal menyimpan menu.', 'error');
+                console.error('CRUD SAVE ERROR:', err);
+                showToast(`❌ ${err.message || 'Gagal menyimpan menu ke Firebase.'}`, 'error');
             } finally {
-                saveBtn.disabled = false;
+                if (saveBtn) saveBtn.disabled = false;
             }
         }
 
         async function deleteMenu(menuId) {
             openConfirmModal("Konfirmasi Hapus Menu", "Apakah Anda yakin ingin menghapus data menu ini?", async () => {
                 try {
-                    if (!db || !state.currentUser) throw new Error('Sesi admin tidak aktif.');
+                    // PERUBAHAN DATA HANYA BOLEH DILAKUKAN DARI SESI ADMIN.
+                    await requireAdminAccess();
+
+                    if (!menuId) throw new Error('ID menu tidak ditemukan.');
+
                     await db.collection('menus').doc(menuId).delete();
-                    showToast('✅ Menu dihapus.', 'success');
+                    showToast('✅ Menu berhasil dihapus dari Firebase.', 'success');
                     await fetchAllMenus();
                 } catch (err) {
-                    console.error(err);
-                    showToast('❌ Gagal menghapus menu.', 'error');
+                    console.error('CRUD DELETE ERROR:', err);
+                    showToast(`❌ ${err.message || 'Gagal menghapus menu dari Firebase.'}`, 'error');
                 }
             });
         }
@@ -1349,123 +1389,95 @@ Energi : 560.05 kkal
         }
 
         /* ==========================================================================
-           AUTHENTICATION — EMAIL & PASSWORD
+           AUTHENTICATION & EMAIL LINK SSO — SPARK / FREE
            ========================================================================== */
-        async function handleEmailPasswordLogin(e) {
+        async function handleSSOManualSubmit(e) {
             e.preventDefault();
             const email = (document.getElementById('ssoEmailInput')?.value || '').trim().toLowerCase();
-            const password = document.getElementById('ssoPasswordInput')?.value || '';
-            const btn = document.getElementById('loginEmailPasswordBtn');
-
-            if (!email || !password) {
-                showToast('❌ Masukkan email dan password.', 'error');
-                return;
-            }
-            if (!auth || !isFirebaseConfigured) {
-                showToast('❌ Firebase Authentication belum terhubung.', 'error');
-                return;
-            }
-
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Memeriksa...</span>';
-                lucide.createIcons();
-            }
-
-            try {
-                const result = await auth.signInWithEmailAndPassword(email, password);
-                const userEmail = (result.user?.email || email).toLowerCase();
-
-                // Firebase Authentication berhasil. Berikutnya cek whitelist admin di Firestore.
-                const allowed = await isEmailRegistered(userEmail);
-                if (!allowed) {
-                    await auth.signOut();
-                    showToast('❌ Login Firebase berhasil, tetapi email ini belum terdaftar di adminEmails.', 'error');
-                    return;
-                }
-
-                state.currentUser = {
-                    uid: result.user.uid,
-                    email: result.user.email || userEmail
-                };
-                await loadAdminEmails();
-                await fetchAllMenus();
-                showToast('🔑 Login admin berhasil.', 'success');
-                renderApp();
-            } catch (err) {
-                console.error('Email/password login error:', err);
-                let message = 'Email atau password salah.';
-                if (err?.code === 'auth/user-not-found' || err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
-                    message = 'Email atau password salah.';
-                } else if (err?.code === 'auth/invalid-email') {
-                    message = 'Format email tidak valid.';
-                } else if (err?.code === 'auth/too-many-requests') {
-                    message = 'Terlalu banyak percobaan login. Coba lagi beberapa saat.';
-                } else if (err?.code === 'auth/user-disabled') {
-                    message = 'Akun ini dinonaktifkan.';
-                } else if (err?.message) {
-                    message = err.message;
-                }
-                showToast('❌ ' + message, 'error');
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i><span>Masuk</span>';
-                    lucide.createIcons();
-                }
-            }
-        }
-
-        async function resetAdminPassword() {
-            const input = document.getElementById('ssoEmailInput');
-            const email = (input?.value || '').trim().toLowerCase();
             if (!email) {
-                showToast('❌ Masukkan email terlebih dahulu untuk reset password.', 'error');
-                input?.focus();
+                showToast('❌ Masukkan email terlebih dahulu.', 'error');
                 return;
             }
             if (!auth || !isFirebaseConfigured) {
                 showToast('❌ Firebase Authentication belum terhubung.', 'error');
                 return;
             }
+
+            const btn = document.getElementById('sendLoginLinkBtn');
+            if (btn) btn.disabled = true;
+
             try {
-                await auth.sendPasswordResetEmail(email);
-                showToast('📩 Jika akun tersebut terdaftar, instruksi reset password telah dikirim ke email.', 'success');
+                // Firebase Email Link dapat mengirim tautan tanpa backend tambahan.
+                // Hak akses admin tetap diperiksa setelah link digunakan.
+                const actionCodeSettings = {
+                    url: window.location.origin + window.location.pathname,
+                    handleCodeInApp: true
+                };
+
+                await auth.sendSignInLinkToEmail(email, actionCodeSettings);
+                window.localStorage.setItem('sppgAdminLoginEmail', email);
+
+                document.getElementById('emailLinkNotice').classList.remove('hidden');
+                document.getElementById('sendLoginLinkBtn').classList.add('hidden');
+                showToast('📩 Link login berhasil dikirim. Periksa Inbox/Spam.', 'success');
+                lucide.createIcons();
             } catch (err) {
-                console.error('Password reset error:', err);
-                // Jangan mengungkap apakah email terdaftar.
-                showToast('📩 Jika akun tersebut terdaftar, instruksi reset password akan dikirim ke email.', 'success');
+                console.error('Email link login error:', err);
+                showToast(`❌ ${err.message || 'Gagal mengirim link login.'}`, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 
-        function togglePasswordVisibility() {
-            const input = document.getElementById('ssoPasswordInput');
-            const icon = document.getElementById('passwordEyeIcon');
-            if (!input) return;
-            const visible = input.type === 'text';
-            input.type = visible ? 'password' : 'text';
-            if (icon) {
-                icon.setAttribute('data-lucide', visible ? 'eye' : 'eye-off');
-                lucide.createIcons();
+        async function completeEmailLinkLogin() {
+            if (!auth || !auth.isSignInWithEmailLink(window.location.href)) return false;
+
+            let email = window.localStorage.getItem('sppgAdminLoginEmail') || '';
+            if (!email) {
+                email = window.prompt('Konfirmasi email untuk menyelesaikan login:');
             }
+            email = (email || '').trim().toLowerCase();
+            if (!email) {
+                showToast('❌ Email diperlukan untuk menyelesaikan login.', 'error');
+                return false;
+            }
+
+            try {
+                await auth.signInWithEmailLink(email, window.location.href);
+                window.localStorage.removeItem('sppgAdminLoginEmail');
+                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+                showToast('🔑 Login admin berhasil.', 'success');
+                return true;
+            } catch (err) {
+                console.error('Complete email link error:', err);
+                showToast(`❌ ${err.message || 'Link login tidak valid atau sudah digunakan.'}`, 'error');
+                return false;
+            }
+        }
+
+        function backToEmailStep() {
+            window.localStorage.removeItem('sppgAdminLoginEmail');
+            const notice = document.getElementById('emailLinkNotice');
+            const btn = document.getElementById('sendLoginLinkBtn');
+            if (notice) notice.classList.add('hidden');
+            if (btn) btn.classList.remove('hidden');
+            const input = document.getElementById('ssoEmailInput');
+            if (input) input.focus();
         }
 
         async function isEmailRegistered(email) {
-            if (!email || !db || !auth?.currentUser) return false;
+            if (!email || !db || !auth?.currentUser) {
+                // Saat belum login, Firestore Rules hanya mengizinkan email yang sedang login.
+                // Untuk permintaan link pertama, gunakan Firebase Auth email enumeration-safe fallback:
+                // lakukan pengecekan dokumen hanya jika sesi anonim/auth sudah tersedia.
+                return false;
+            }
             try {
                 const normalized = email.toLowerCase().trim();
-                const currentAuthEmail = (auth.currentUser.email || '').toLowerCase().trim();
-                if (!currentAuthEmail || currentAuthEmail !== normalized) return false;
-
-                // Cek langsung dokumen admin berdasarkan email yang sudah dinormalisasi.
-                // Struktur yang digunakan: adminEmails/{email} -> { email: email }
                 const snap = await db.collection('adminEmails').doc(normalized).get();
-                if (!snap.exists) return false;
-
-                const data = snap.data() || {};
-                return String(data.email || '').toLowerCase().trim() === normalized;
+                return snap.exists && (snap.data().email || '').toLowerCase() === normalized;
             } catch (err) {
-                console.error('Gagal memeriksa akses admin:', err);
+                console.warn('Gagal memeriksa admin email:', err);
                 return false;
             }
         }
