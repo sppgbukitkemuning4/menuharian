@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Hanya akun yang sudah tercatat di adminEmails yang dapat
+    // membaca/menulis data admin dan mengelola menu.
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/adminEmails/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/adminEmails/$(request.auth.token.email)).data.email == request.auth.token.email;
+    }
+
+    match /adminEmails/{email} {
+      // Admin yang sudah terdaftar dapat membaca daftar admin.
+      allow read: if isAdmin();
+      // Hanya admin terdaftar yang dapat menambah/menghapus email admin.
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /menus/{menuId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
