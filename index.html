@@ -195,7 +195,7 @@
                     <div class="text-center max-w-2xl mx-auto space-y-2">
                         <span class="text-[10px] sm:text-xs font-black uppercase tracking-widest text-bgn-green bg-bgn-green-light px-3 py-1 rounded-full border border-bgn-green/20">Standar Kecukupan Gizi</span>
                         <h3 class="text-2xl sm:text-3xl font-extrabold text-bgn-navy">Rincian Informasi Nilai Gizi</h3>
-                        <p class="text-slate-500 text-xs sm:text-sm">Analisis presisi kandungan gizi per porsi untuk Kategori PB (Porsi Besar/SD) & PK (Porsi Kecil/PAUD).</p>
+                        <p class="text-slate-500 text-xs sm:text-sm">Analisis presisi kandungan gizi per porsi untuk Kategori PB (Porsi Besar) & PK (Porsi Kecil).</p>
                     </div>
 
                     <div id="nutritionContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
@@ -261,13 +261,44 @@
                             <h4 class="font-bold text-bgn-gold text-sm sm:text-base flex items-center gap-2">
                                 <i data-lucide="info" class="w-5 h-5"></i> Panduan Porsi & Konsumsi
                             </h4>
-                            <ul class="text-xs text-slate-200 space-y-2 list-disc list-inside leading-relaxed">
-                                <li>Menu disiapkan dan dimasak segar setiap hari sekolah.</li>
-                                <li><strong>PB (Porsi Besar):</strong> Diperuntukkan bagi peserta didik SD / Kelas Atas.</li>
-                                <li><strong>PK (Porsi Kecil):</strong> Diperuntukkan bagi peserta didik PAUD / TK / Kelas Rendah.</li>
-                                <li class="text-amber-300 font-semibold">Segera konsumsi setelah diterima, maksimal 2 jam setelah makanan diterima dan tidak boleh dibawa pulang untuk menjaga kualitas makanan.</li>
-                                <li>Seluruh angka gizi diuji secara rinci tanpa pembulatan.</li>
-                            </ul>
+                            <ul class="text-xs text-slate-200 space-y-3 leading-relaxed list-none">
+        <li>
+            <div class="flex items-start gap-2">
+                <span class="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                <div>Menu disiapkan dan dimasak segar setiap hari sekolah.</div>
+            </div>
+        </li>
+        <li>
+            <div class="flex items-start gap-2">
+                <span class="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                <div>
+                    <strong>PB (Porsi Besar):</strong>
+                    <div class="mt-1 ml-0">Penerima: ibu hamil, ibu menyusui, siswa SD kelas 4–6, serta tingkat SMP dan SMA sederajat.</div>
+                </div>
+            </div>
+        </li>
+        <li>
+            <div class="flex items-start gap-2">
+                <span class="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                <div>
+                    <strong>PK (Porsi Kecil):</strong>
+                    <div class="mt-1 ml-0">Penerima: balita, anak PAUD/TK, dan siswa SD kelas 1–3.</div>
+                </div>
+            </div>
+        </li>
+        <li class="text-amber-300 font-semibold">
+            <div class="flex items-start gap-2">
+                <span class="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-amber-300"></span>
+                <div>Segera konsumsi setelah diterima, maksimal 2 jam setelah makanan diterima dan tidak boleh dibawa pulang untuk menjaga kualitas makanan.</div>
+            </div>
+        </li>
+        <li>
+            <div class="flex items-start gap-2">
+                <span class="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                <div>Seluruh angka gizi diuji secara rinci tanpa pembulatan.</div>
+            </div>
+        </li>
+    </ul>
                         </div>
                     </div>
                 </div>
@@ -466,7 +497,7 @@ Energi : 560.05 kkal
                             <!-- PB Fields -->
                             <div class="space-y-3">
                                 <h4 class="font-bold text-bgn-navy text-xs sm:text-sm border-b pb-2 flex items-center justify-between">
-                                    <span>PB (Porsi Besar / SD)</span>
+                                    <span>PB (Porsi Besar)</span>
                                     <span class="text-[10px] text-slate-400 font-normal">Parsed Values</span>
                                 </h4>
                                 <div class="grid grid-cols-2 gap-2 text-xs">
@@ -500,7 +531,7 @@ Energi : 560.05 kkal
                             <!-- PK Fields -->
                             <div class="space-y-3">
                                 <h4 class="font-bold text-bgn-navy text-xs sm:text-sm border-b pb-2 flex items-center justify-between">
-                                    <span>PK (Porsi Kecil / PAUD)</span>
+                                    <span>PK (Porsi Kecil)</span>
                                     <span class="text-[10px] text-slate-400 font-normal">Parsed Values</span>
                                 </h4>
                                 <div class="grid grid-cols-2 gap-2 text-xs">
@@ -1256,7 +1287,7 @@ Energi : 560.05 kkal
                     <div class="flex items-center justify-between border-b pb-4 border-slate-100">
                         <div>
                             <span class="text-[10px] font-black text-white uppercase tracking-wider bg-bgn-navy px-2.5 py-1 rounded-md">Kategori PB</span>
-                            <h4 class="text-lg font-black text-bgn-navy mt-1">Porsi Besar (SD / Kelas Atas)</h4>
+                            <h4 class="text-lg font-black text-bgn-navy mt-1">Porsi Besar</h4>
                         </div>
                         <div class="w-10 h-10 bg-bgn-navy text-white rounded-xl flex items-center justify-center font-bold text-xs">PB</div>
                     </div>
@@ -1274,7 +1305,7 @@ Energi : 560.05 kkal
                     <div class="flex items-center justify-between border-b pb-4 border-slate-100">
                         <div>
                             <span class="text-[10px] font-black text-white uppercase tracking-wider bg-bgn-green px-2.5 py-1 rounded-md">Kategori PK</span>
-                            <h4 class="text-lg font-black text-bgn-navy mt-1">Porsi Kecil (PAUD / TK)</h4>
+                            <h4 class="text-lg font-black text-bgn-navy mt-1">Porsi Kecil</h4>
                         </div>
                         <div class="w-10 h-10 bg-bgn-green-light text-bgn-green rounded-xl flex items-center justify-center font-bold text-xs">PK</div>
                     </div>
