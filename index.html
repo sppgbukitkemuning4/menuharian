@@ -537,22 +537,22 @@ Energi : 560.05 kkal
                             <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Foto Makanan Menu <span class="text-red-500">*</span></label>
                             
                             <div id="dropzone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" onclick="triggerFileInput()" class="border-2 border-dashed border-slate-300 hover:border-bgn-green rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-50 relative">
-                                <input type="file" id="fotoFileInput" accept="image/jpeg,image/jpg,image/png,image/webp" onchange="handleFileSelect(event)" class="hidden">
+                                <input type="file" id="fotoFileInput" accept="image/jpeg,image/jpg,image/png,image/webp" multiple onchange="handleFileSelect(event)" class="hidden">
                                 
                                 <div id="dropzonePrompt" class="space-y-2">
                                     <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-slate-400">
                                         <i data-lucide="upload-cloud" class="w-6 h-6 text-bgn-green"></i>
                                     </div>
                                     <p class="text-xs sm:text-sm font-bold text-slate-700">UNGGAH ATAU SERET FOTO DI SINI</p>
-                                    <p class="text-[11px] text-slate-400">Mendukung HP & Laptop (JPG, PNG, WEBP, Maks 5MB)</p>
+                                    <p class="text-[11px] text-slate-400">Mendukung hingga 2 foto • JPG, PNG, WEBP • Maks 5MB/foto</p>
                                 </div>
 
                                 <div id="imagePreviewBox" class="hidden space-y-3">
-                                    <img id="previewImageTag" src="" alt="Preview Menu" class="max-h-52 mx-auto rounded-xl object-cover shadow-md">
-                                    <p id="previewFileName" class="text-xs font-semibold text-slate-600"></p>
+                                    <div id="previewImagesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+                                    <p id="previewFileName" class="text-[11px] font-semibold text-slate-500"></p>
                                     <div class="flex items-center justify-center space-x-3">
-                                        <button type="button" onclick="triggerFileInput(); event.stopPropagation()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg">Ganti Foto</button>
-                                        <button type="button" onclick="clearPhoto(); event.stopPropagation()" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-semibold rounded-lg">Hapus Foto</button>
+                                        <button type="button" onclick="triggerFileInput(); event.stopPropagation()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg">Tambah/Ganti Foto</button>
+                                        <button type="button" onclick="clearPhoto(); event.stopPropagation()" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-semibold rounded-lg">Hapus Semua</button>
                                     </div>
                                 </div>
                             </div>
@@ -733,8 +733,8 @@ Energi : 560.05 kkal
             currentUser: null,
             registeredEmails: [],
             menus: [],
-            selectedFile: null,
-            selectedFileBase64: null,
+            selectedFiles: [],
+            selectedFileBase64s: [],
             confirmCallback: null
         };
 
@@ -841,6 +841,7 @@ Energi : 560.05 kkal
                     buah: 'Buah Jeruk'
                 },
                 fotoUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
+                fotoUrls: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80'],
                 gizi: {
                     PB: { energi: '560.05 kkal', protein: '17.11 gram', lemak: '10.80 gram', karbohidrat: '96.43 gram', serat: '2.55 gram', vitamin: '3.80 mg' },
                     PK: { energi: '470.05 kkal', protein: '15.61 gram', lemak: '10.65 gram', karbohidrat: '76.53 gram', serat: '2.45 gram', vitamin: '3.80 mg' }
@@ -944,36 +945,51 @@ Energi : 560.05 kkal
         function handleDrop(e) {
             e.preventDefault();
             document.getElementById('dropzone').classList.remove('drag-highlight');
-            if (e.dataTransfer.files && e.dataTransfer.files[0]) processUploadedFile(e.dataTransfer.files[0]);
+            if (e.dataTransfer.files && e.dataTransfer.files.length) processUploadedFiles(Array.from(e.dataTransfer.files));
         }
         function handleFileSelect(e) {
-            if (e.target.files && e.target.files[0]) processUploadedFile(e.target.files[0]);
+            if (e.target.files && e.target.files.length) processUploadedFiles(Array.from(e.target.files));
         }
-        async function processUploadedFile(file) {
-            if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
-                showToast('❌ Format foto harus JPG, PNG, atau WEBP.', 'error');
+        async function processUploadedFiles(files) {
+            const valid = files.filter(file => ['image/jpeg','image/jpg','image/png','image/webp'].includes(file.type));
+            if (valid.length !== files.length) {
+                showToast('❌ Semua foto harus JPG, PNG, atau WEBP.', 'error');
                 return;
             }
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('❌ Ukuran foto maksimal 5MB.', 'error');
+            if (valid.some(file => file.size > 5 * 1024 * 1024)) {
+                showToast('❌ Ukuran setiap foto maksimal 5MB.', 'error');
                 return;
             }
-
+            if (valid.length > 2) {
+                showToast('❌ Maksimal 2 foto menu.', 'error');
+                return;
+            }
             try {
-                const compressed = await compressImageForFirestore(file);
-                state.selectedFile = null;
-                state.selectedFileBase64 = compressed.dataUrl;
-                document.getElementById('previewImageTag').src = compressed.dataUrl;
-                document.getElementById('previewFileName').innerText = `${file.name} (${compressed.kb.toFixed(1)} KB setelah kompresi)`;
-                document.getElementById('dropzonePrompt').classList.add('hidden');
-                document.getElementById('imagePreviewBox').classList.remove('hidden');
-                showToast('✅ Foto berhasil dikompres dan siap disimpan.', 'success');
+                const compressed = [];
+                for (const file of valid) compressed.push(await compressImageForFirestore(file));
+                state.selectedFiles = valid;
+                state.selectedFileBase64s = compressed.map(x => x.dataUrl);
+                renderPhotoPreviews(compressed.map((x, i) => ({...x, name: valid[i].name})));
+                showToast(`✅ ${compressed.length} foto siap disimpan.`, 'success');
             } catch (err) {
                 console.error('Image compression error:', err);
                 showToast(`❌ ${err.message || 'Foto terlalu besar untuk disimpan.'}`, 'error');
             }
         }
-
+        function renderPhotoPreviews(items) {
+            const grid = document.getElementById('previewImagesGrid');
+            const box = document.getElementById('imagePreviewBox');
+            const prompt = document.getElementById('dropzonePrompt');
+            if (!grid || !box || !prompt) return;
+            grid.innerHTML = items.map((item, i) => `
+                <div class="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                    <img src="${item.dataUrl}" alt="Preview Foto ${i+1}" class="w-full h-32 sm:h-36 object-cover">
+                    <span class="absolute top-2 left-2 bg-bgn-navy/90 text-white text-[9px] font-bold px-2 py-1 rounded-lg">FOTO ${i+1}</span>
+                </div>`).join('');
+            document.getElementById('previewFileName').innerText = `${items.length} foto dipilih • ${items.map(x => x.kb.toFixed(0) + ' KB').join(' + ')}`;
+            prompt.classList.add('hidden');
+            box.classList.remove('hidden');
+        }
         function compressImageForFirestore(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -988,50 +1004,32 @@ Energi : 560.05 kkal
                         const scale = Math.min(1, maxDimension / Math.max(width, height));
                         width = Math.max(1, Math.round(width * scale));
                         height = Math.max(1, Math.round(height * scale));
-
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d', { alpha: false });
                         if (!ctx) return reject(new Error('Canvas tidak tersedia di browser.'));
-                        canvas.width = width;
-                        canvas.height = height;
-                        ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(0, 0, width, height);
+                        canvas.width = width; canvas.height = height;
+                        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
                         ctx.drawImage(img, 0, 0, width, height);
-
-                        let quality = 0.82;
+                        let quality = 0.78;
                         let dataUrl = canvas.toDataURL('image/jpeg', quality);
-                        let attempts = 0;
-                        while (dataUrl.length > 950000 && attempts < 7) {
-                            attempts++;
-                            quality = Math.max(0.42, quality - 0.08);
-                            if (attempts >= 3) {
-                                width = Math.max(600, Math.round(width * 0.86));
-                                height = Math.max(600, Math.round(height * 0.86));
-                                canvas.width = width;
-                                canvas.height = height;
-                                ctx.fillStyle = '#ffffff';
-                                ctx.fillRect(0, 0, width, height);
-                                ctx.drawImage(img, 0, 0, width, height);
-                            }
+                        while (dataUrl.length > 900000 && quality > 0.45) {
+                            quality -= 0.06;
                             dataUrl = canvas.toDataURL('image/jpeg', quality);
                         }
-
-                        if (dataUrl.length > 950000) {
-                            return reject(new Error('Foto masih terlalu besar setelah kompresi. Pilih foto lain.'));
-                        }
-                        resolve({ dataUrl, kb: dataUrl.length * 0.75 / 1024 });
+                        if (dataUrl.length > 950000) return reject(new Error('Foto masih terlalu besar setelah kompresi.'));
+                        resolve({ dataUrl, kb: dataUrl.length / 1.37 / 1024 });
                     };
                     img.src = reader.result;
                 };
                 reader.readAsDataURL(file);
             });
         }
-
         function clearPhoto() {
-            state.selectedFile = null;
-            state.selectedFileBase64 = null;
+            state.selectedFiles = [];
+            state.selectedFileBase64s = [];
             document.getElementById('fotoFileInput').value = '';
-            document.getElementById('previewImageTag').src = '';
+            document.getElementById('previewImagesGrid').innerHTML = '';
+            document.getElementById('previewFileName').innerText = '';
             document.getElementById('dropzonePrompt').classList.remove('hidden');
             document.getElementById('imagePreviewBox').classList.add('hidden');
         }
@@ -1101,13 +1099,15 @@ Energi : 560.05 kkal
                     if (existing) finalPhotoUrl = existing.fotoUrl;
                 }
 
-                if (state.selectedFileBase64) {
-                    finalPhotoUrl = state.selectedFileBase64;
+                if (state.selectedFileBase64s && state.selectedFileBase64s.length) {
+                    finalPhotoUrl = state.selectedFileBase64s[0];
                 }
 
                 const menuPayload = {
                     tanggal, namaMenu, deskripsi, komponen,
-                    fotoUrl: finalPhotoUrl, gizi, status,
+                    fotoUrl: finalPhotoUrl,
+                    fotoUrls: (state.selectedFileBase64s && state.selectedFileBase64s.length) ? state.selectedFileBase64s.slice(0, 2) : (editingId ? ((state.menus.find(m => m.id === editingId)?.fotoUrls || []).slice(0, 2)) : [finalPhotoUrl]),
+                    gizi, status,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
@@ -1181,9 +1181,15 @@ Energi : 560.05 kkal
 
             menuContainer.innerHTML = `
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-                    <div class="lg:col-span-6 relative bg-slate-900 min-h-[260px] sm:min-h-[380px]">
-                        <img src="${menu.fotoUrl}" alt="${menu.namaMenu}" onerror="this.src='https://placehold.co/800x600/0E2A4A/FFFFFF?text=Foto+Menu+MBG'" class="w-full h-full object-cover">
-                        <div class="absolute bottom-3 left-3 bg-bgn-navy/90 backdrop-blur-md text-white text-[11px] font-semibold px-3 py-1.5 rounded-xl border border-white/20 flex items-center gap-1.5">
+                    <div class="lg:col-span-6 relative bg-slate-900 min-h-[260px] sm:min-h-[380px] p-1.5">
+                        <div class="h-full grid ${((menu.fotoUrls || [menu.fotoUrl]).filter(Boolean).length > 1) ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5">
+                            ${(menu.fotoUrls || [menu.fotoUrl]).filter(Boolean).slice(0,2).map((photo, i) => `
+                                <div class="relative min-h-[255px] sm:min-h-[365px] overflow-hidden rounded-xl bg-slate-800">
+                                    <img src="${photo}" alt="${menu.namaMenu} - Foto ${i+1}" onerror="this.src='https://placehold.co/800x600/0E2A4A/FFFFFF?text=Foto+Menu+MBG'" class="w-full h-full object-cover">
+                                    ${((menu.fotoUrls || []).length > 1) ? `<span class="absolute top-2 left-2 bg-bgn-navy/90 text-white text-[9px] font-bold px-2 py-1 rounded-lg">FOTO ${i+1}</span>` : ''}
+                                </div>`).join('')}
+                        </div>
+                        <div class="absolute bottom-3 left-3 bg-bgn-navy/90 backdrop-blur-md text-white text-[10px] font-semibold px-3 py-1.5 rounded-xl border border-white/20 flex items-center gap-1.5">
                             <img src="https://www.bgn.go.id/logo-bgn.png" class="w-4 h-4 object-contain">
                             <span>Foto Resmi SPPG Bukit Kemuning 4</span>
                         </div>
@@ -1207,22 +1213,26 @@ Energi : 560.05 kkal
 
                             <div class="pt-2 space-y-2">
                                 <h4 class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Komponen Hidangan</h4>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs">
                                     <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                                        <span class="text-slate-400 font-semibold block text-[10px]">MAKANAN POKOK</span>
-                                        <span class="font-bold text-bgn-navy">${menu.komponen?.pokok || '-'}</span>
+                                        <span class="text-slate-400 font-semibold block text-[9px]">MAKANAN POKOK</span>
+                                        <span class="font-bold text-bgn-navy leading-tight">${menu.komponen?.pokok || '-'}</span>
                                     </div>
                                     <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                                        <span class="text-slate-400 font-semibold block text-[10px]">LAUK UTAMA</span>
-                                        <span class="font-bold text-bgn-navy">${menu.komponen?.lauk || '-'}</span>
+                                        <span class="text-slate-400 font-semibold block text-[9px]">LAUK UTAMA</span>
+                                        <span class="font-bold text-bgn-navy leading-tight">${menu.komponen?.lauk || '-'}</span>
                                     </div>
                                     <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                                        <span class="text-slate-400 font-semibold block text-[10px]">PELENGKAP</span>
-                                        <span class="font-bold text-bgn-navy">${menu.komponen?.pelengkap || '-'}</span>
+                                        <span class="text-slate-400 font-semibold block text-[9px]">LAUK PENDAMPING</span>
+                                        <span class="font-bold text-bgn-navy leading-tight">${menu.komponen?.pelengkap || '-'}</span>
                                     </div>
                                     <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                                        <span class="text-slate-400 font-semibold block text-[10px]">SAYUR & BUAH</span>
-                                        <span class="font-bold text-bgn-navy">${menu.komponen?.sayur || ''} ${menu.komponen?.buah ? '+ ' + menu.komponen.buah : ''}</span>
+                                        <span class="text-slate-400 font-semibold block text-[9px]">SAYUR</span>
+                                        <span class="font-bold text-bgn-navy leading-tight">${menu.komponen?.sayur || '-'}</span>
+                                    </div>
+                                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                                        <span class="text-slate-400 font-semibold block text-[9px]">BUAH</span>
+                                        <span class="font-bold text-bgn-navy leading-tight">${menu.komponen?.buah || '-'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1374,11 +1384,11 @@ Energi : 560.05 kkal
                 document.getElementById('pkSerat').value = pk.serat || '';
                 document.getElementById('pkVitamin').value = pk.vitamin || '';
 
-                if (editingMenu.fotoUrl) {
-                    document.getElementById('previewImageTag').src = editingMenu.fotoUrl;
-                    document.getElementById('previewFileName').innerText = 'Foto Menu Saat Ini';
-                    document.getElementById('dropzonePrompt').classList.add('hidden');
-                    document.getElementById('imagePreviewBox').classList.remove('hidden');
+                const existingPhotos = (editingMenu.fotoUrls && editingMenu.fotoUrls.length) ? editingMenu.fotoUrls.slice(0, 2) : (editingMenu.fotoUrl ? [editingMenu.fotoUrl] : []);
+                if (existingPhotos.length) {
+                    state.selectedFileBase64s = [];
+                    const items = existingPhotos.map((dataUrl, i) => ({ dataUrl, kb: 0, name: `Foto ${i+1}` }));
+                    renderPhotoPreviews(items);
                 }
             } else {
                 document.getElementById('formTitleText').innerText = 'Tambah Menu Baru';
