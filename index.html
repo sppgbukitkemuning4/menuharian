@@ -276,47 +276,47 @@
 
         <div id="adminView" class="hidden min-h-screen bg-slate-100 py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
             
-            <!-- ADMIN LOGIN SECTION (FIREBASE EMAIL LINK) -->
+            <!-- ADMIN LOGIN SECTION (FIREBASE EMAIL + PASSWORD) -->
             <div id="adminLoginSection" class="max-w-md mx-auto pt-6 sm:pt-12">
                 <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 space-y-6">
                     <div class="text-center space-y-2">
                         <div class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center mx-auto shadow-md p-2">
                             <img src="https://www.bgn.go.id/logo-bgn.png" alt="BGN Admin Logo" class="max-h-full max-w-full object-contain">
                         </div>
-                        <h2 class="text-xl sm:text-2xl font-black text-bgn-navy">Login Admin SSO</h2>
-                        <p class="text-slate-500 text-xs">Masukkan email admin. Tautan login aman akan dikirim ke email yang memiliki akses.</p>
+                        <h2 class="text-xl sm:text-2xl font-black text-bgn-navy">Login Admin</h2>
+                        <p class="text-slate-500 text-xs">Masuk menggunakan email dan password admin Firebase.</p>
                     </div>
 
                     <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 space-y-2">
                         <div class="flex items-center space-x-2 font-bold text-bgn-navy">
                             <i data-lucide="shield-check" class="w-4 h-4 text-bgn-green shrink-0"></i>
-                            <span>Login Aman Tanpa Password</span>
+                            <span>Login Firebase Email + Password</span>
                         </div>
                         <p class="text-slate-600 leading-relaxed text-[11px]">
-                            Email admin tidak ditampilkan di halaman login. Firebase akan mengirim tautan login satu kali ke email yang memiliki akses.
+                            Gunakan email dan password yang sudah terdaftar di Firebase Authentication.
                         </p>
                     </div>
 
-                    <form id="ssoLoginForm" onsubmit="handleSSOManualSubmit(event)" class="space-y-3">
+                    <form id="passwordLoginForm" onsubmit="handlePasswordLogin(event)" class="space-y-3">
                         <div>
-                            <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Email</label>
-                            <input type="email" id="ssoEmailInput" required autocomplete="email"
-                                   placeholder="Masukkan email Anda"
+                            <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Email Admin</label>
+                            <input type="email" id="adminEmailInput" required autocomplete="email"
+                                   value="sppgbukitkemuning4@gmail.com"
+                                   placeholder="Masukkan email admin"
                                    class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-bgn-navy text-sm outline-none">
-                            <p class="mt-2 text-[10px] text-slate-400">Tautan login hanya dapat digunakan oleh email yang terdaftar sebagai admin.</p>
                         </div>
-
-                        <button type="submit" id="sendLoginLinkBtn"
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-slate-600 mb-1">Password</label>
+                            <input type="password" id="adminPasswordInput" required autocomplete="current-password"
+                                   placeholder="Masukkan password"
+                                   class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-bgn-navy text-sm outline-none">
+                        </div>
+                        <button type="submit" id="adminLoginBtn"
                                 class="w-full bg-bgn-navy hover:bg-bgn-light text-white font-bold py-3.5 rounded-xl shadow-md transition-colors flex items-center justify-center space-x-2 text-sm active:scale-95">
-                            <i data-lucide="mail" class="w-4 h-4"></i>
-                            <span>Kirim Link Login</span>
+                            <i data-lucide="log-in" class="w-4 h-4"></i>
+                            <span>Masuk sebagai Admin</span>
                         </button>
                     </form>
-
-                    <div id="emailLinkNotice" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-[11px] text-emerald-900 hidden">
-                        <div class="font-bold flex items-center gap-2"><i data-lucide="mail-check" class="w-4 h-4"></i>Link login dikirim</div>
-                        <p class="mt-1 leading-relaxed">Periksa Inbox/Spam email Anda, lalu klik tautan login. Setelah berhasil, halaman ini akan membuka Panel Admin.</p>
-                    </div>
 
                     <div class="text-center pt-2">
                         <button onclick="showPublicView()" class="text-xs font-semibold text-slate-500 hover:text-bgn-navy flex items-center justify-center space-x-1 mx-auto">
@@ -955,60 +955,71 @@ Energi : 560.05 kkal
                 return;
             }
             if (file.size > 5 * 1024 * 1024) {
-                showToast('❌ Ukuran foto asli maksimal 5MB.', 'error');
+                showToast('❌ Ukuran foto maksimal 5MB.', 'error');
                 return;
             }
+
             try {
-                showToast('⏳ Mengoptimalkan foto...', 'success');
-                const compressedDataUrl = await compressImageForFirestore(file);
-                state.selectedFile = file;
-                state.selectedFileBase64 = compressedDataUrl;
-                document.getElementById('previewImageTag').src = compressedDataUrl;
-                document.getElementById('previewFileName').innerText = `${file.name} • otomatis dioptimalkan`;
+                const compressed = await compressImageForFirestore(file);
+                state.selectedFile = null;
+                state.selectedFileBase64 = compressed.dataUrl;
+                document.getElementById('previewImageTag').src = compressed.dataUrl;
+                document.getElementById('previewFileName').innerText = `${file.name} (${compressed.kb.toFixed(1)} KB setelah kompresi)`;
                 document.getElementById('dropzonePrompt').classList.add('hidden');
                 document.getElementById('imagePreviewBox').classList.remove('hidden');
-                showToast('✅ Foto siap disimpan ke Firebase.', 'success');
+                showToast('✅ Foto berhasil dikompres dan siap disimpan.', 'success');
             } catch (err) {
-                console.error(err);
-                state.selectedFile = null;
-                state.selectedFileBase64 = null;
-                showToast('❌ Foto gagal diproses. Coba JPG/PNG yang lebih kecil.', 'error');
+                console.error('Image compression error:', err);
+                showToast(`❌ ${err.message || 'Foto terlalu besar untuk disimpan.'}`, 'error');
             }
         }
 
         function compressImageForFirestore(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onerror = () => reject(new Error('File tidak dapat dibaca.'));
+                reader.onerror = () => reject(new Error('Gagal membaca foto.'));
                 reader.onload = () => {
                     const img = new Image();
-                    img.onerror = () => reject(new Error('File gambar tidak valid.'));
+                    img.onerror = () => reject(new Error('Foto tidak dapat diproses.'));
                     img.onload = () => {
-                        let width = img.naturalWidth;
-                        let height = img.naturalHeight;
                         const maxDimension = 1400;
+                        let width = img.naturalWidth || img.width;
+                        let height = img.naturalHeight || img.height;
                         const scale = Math.min(1, maxDimension / Math.max(width, height));
                         width = Math.max(1, Math.round(width * scale));
                         height = Math.max(1, Math.round(height * scale));
 
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d', { alpha: false });
-                        if (!ctx) return reject(new Error('Canvas tidak tersedia.'));
+                        if (!ctx) return reject(new Error('Canvas tidak tersedia di browser.'));
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, width, height);
 
-                        let dataUrl = '';
-                        for (let attempt = 0; attempt < 5; attempt++) {
-                            canvas.width = width;
-                            canvas.height = height;
-                            ctx.fillStyle = '#ffffff';
-                            ctx.fillRect(0, 0, width, height);
-                            ctx.drawImage(img, 0, 0, width, height);
-                            dataUrl = canvas.toDataURL('image/jpeg', attempt === 0 ? 0.78 : 0.68);
-                            if (dataUrl.length <= 900000) break;
-                            width = Math.max(600, Math.round(width * 0.82));
-                            height = Math.max(600, Math.round(height * 0.82));
+                        let quality = 0.82;
+                        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                        let attempts = 0;
+                        while (dataUrl.length > 950000 && attempts < 7) {
+                            attempts++;
+                            quality = Math.max(0.42, quality - 0.08);
+                            if (attempts >= 3) {
+                                width = Math.max(600, Math.round(width * 0.86));
+                                height = Math.max(600, Math.round(height * 0.86));
+                                canvas.width = width;
+                                canvas.height = height;
+                                ctx.fillStyle = '#ffffff';
+                                ctx.fillRect(0, 0, width, height);
+                                ctx.drawImage(img, 0, 0, width, height);
+                            }
+                            dataUrl = canvas.toDataURL('image/jpeg', quality);
                         }
-                        if (dataUrl.length > 950000) return reject(new Error('Foto masih terlalu besar.'));
-                        resolve(dataUrl);
+
+                        if (dataUrl.length > 950000) {
+                            return reject(new Error('Foto masih terlalu besar setelah kompresi. Pilih foto lain.'));
+                        }
+                        resolve({ dataUrl, kb: dataUrl.length * 0.75 / 1024 });
                     };
                     img.src = reader.result;
                 };
@@ -1026,17 +1037,18 @@ Energi : 560.05 kkal
         }
 
         async function fetchAllMenus() {
-            if (isFirebaseConfigured && db) {
-                try {
-                    const snapshot = await db.collection('menus').orderBy('tanggal', 'desc').get();
-                    state.menus = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                } catch (err) {
-                    console.error('Firestore read error:', err);
-                    state.menus = [];
-                    showToast('❌ Gagal membaca menu dari Firebase.', 'error');
-                }
-            } else {
-                loadLocalMenus();
+            if (!isFirebaseConfigured || !db) {
+                state.menus = defaultInitialMenus;
+                renderApp();
+                return;
+            }
+            try {
+                const snapshot = await db.collection('menus').orderBy('tanggal', 'desc').get();
+                state.menus = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (err) {
+                console.error('Gagal mengambil menu Firestore:', err);
+                showToast(`❌ Gagal mengambil data menu: ${err.message || 'Firestore error'}`, 'error');
+                state.menus = [];
             }
             renderApp();
         }
@@ -1089,8 +1101,9 @@ Energi : 560.05 kkal
                     if (existing) finalPhotoUrl = existing.fotoUrl;
                 }
 
-                // Firebase Spark: foto disimpan sebagai data URL yang sudah dikompres di browser.
-                if (state.selectedFileBase64) finalPhotoUrl = state.selectedFileBase64;
+                if (state.selectedFileBase64) {
+                    finalPhotoUrl = state.selectedFileBase64;
+                }
 
                 const menuPayload = {
                     tanggal, namaMenu, deskripsi, komponen,
@@ -1124,13 +1137,15 @@ Energi : 560.05 kkal
         async function deleteMenu(menuId) {
             openConfirmModal("Konfirmasi Hapus Menu", "Apakah Anda yakin ingin menghapus data menu ini?", async () => {
                 try {
-                    if (!db || !state.currentUser) throw new Error('Sesi admin tidak aktif.');
+                    if (!isFirebaseConfigured || !db || !state.currentUser) {
+                        throw new Error('Firebase/database admin belum terhubung.');
+                    }
                     await db.collection('menus').doc(menuId).delete();
-                    showToast('✅ Menu dihapus.', 'success');
+                    showToast('✅ Menu berhasil dihapus.', 'success');
                     await fetchAllMenus();
                 } catch (err) {
-                    console.error(err);
-                    showToast('❌ Gagal menghapus menu.', 'error');
+                    console.error('Delete menu error:', err);
+                    showToast(`❌ Gagal menghapus menu: ${err.message || 'Firestore error'}`, 'error');
                 }
             });
         }
@@ -1382,13 +1397,16 @@ Energi : 560.05 kkal
         }
 
         /* ==========================================================================
-           AUTHENTICATION & EMAIL LINK SSO — SPARK / FREE
+           AUTHENTICATION — FIREBASE EMAIL + PASSWORD
            ========================================================================== */
-        async function handleSSOManualSubmit(e) {
+        async function handlePasswordLogin(e) {
             e.preventDefault();
-            const email = (document.getElementById('ssoEmailInput')?.value || '').trim().toLowerCase();
-            if (!email) {
-                showToast('❌ Masukkan email terlebih dahulu.', 'error');
+            const email = (document.getElementById('adminEmailInput')?.value || '').trim().toLowerCase();
+            const password = document.getElementById('adminPasswordInput')?.value || '';
+            const btn = document.getElementById('adminLoginBtn');
+
+            if (!email || !password) {
+                showToast('❌ Email dan password wajib diisi.', 'error');
                 return;
             }
             if (!auth || !isFirebaseConfigured) {
@@ -1396,75 +1414,28 @@ Energi : 560.05 kkal
                 return;
             }
 
-            const btn = document.getElementById('sendLoginLinkBtn');
             if (btn) btn.disabled = true;
-
             try {
-                // Firebase Email Link dapat mengirim tautan tanpa backend tambahan.
-                // Hak akses admin tetap diperiksa setelah link digunakan.
-                const actionCodeSettings = {
-                    url: window.location.origin + window.location.pathname,
-                    handleCodeInApp: true
-                };
-
-                await auth.sendSignInLinkToEmail(email, actionCodeSettings);
-                window.localStorage.setItem('sppgAdminLoginEmail', email);
-
-                document.getElementById('emailLinkNotice').classList.remove('hidden');
-                document.getElementById('sendLoginLinkBtn').classList.add('hidden');
-                showToast('📩 Link login berhasil dikirim. Periksa Inbox/Spam.', 'success');
-                lucide.createIcons();
+                // LOGIN RESMI: Email + Password. Jangan diganti menjadi email link/OTP/Google SSO.
+                await auth.signInWithEmailAndPassword(email, password);
             } catch (err) {
-                console.error('Email link login error:', err);
-                showToast(`❌ ${err.message || 'Gagal mengirim link login.'}`, 'error');
+                console.error('Email/password login error:', err);
+                let message = err.message || 'Login gagal.';
+                if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+                    message = 'Email atau password salah.';
+                } else if (err.code === 'auth/user-not-found') {
+                    message = 'Email admin belum terdaftar di Firebase Authentication.';
+                } else if (err.code === 'auth/too-many-requests') {
+                    message = 'Terlalu banyak percobaan login. Coba lagi beberapa saat.';
+                }
+                showToast(`❌ ${message}`, 'error');
             } finally {
                 if (btn) btn.disabled = false;
             }
         }
 
-        async function completeEmailLinkLogin() {
-            if (!auth || !auth.isSignInWithEmailLink(window.location.href)) return false;
-
-            let email = window.localStorage.getItem('sppgAdminLoginEmail') || '';
-            if (!email) {
-                email = window.prompt('Konfirmasi email untuk menyelesaikan login:');
-            }
-            email = (email || '').trim().toLowerCase();
-            if (!email) {
-                showToast('❌ Email diperlukan untuk menyelesaikan login.', 'error');
-                return false;
-            }
-
-            try {
-                await auth.signInWithEmailLink(email, window.location.href);
-                window.localStorage.removeItem('sppgAdminLoginEmail');
-                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-                showToast('🔑 Login admin berhasil.', 'success');
-                return true;
-            } catch (err) {
-                console.error('Complete email link error:', err);
-                showToast(`❌ ${err.message || 'Link login tidak valid atau sudah digunakan.'}`, 'error');
-                return false;
-            }
-        }
-
-        function backToEmailStep() {
-            window.localStorage.removeItem('sppgAdminLoginEmail');
-            const notice = document.getElementById('emailLinkNotice');
-            const btn = document.getElementById('sendLoginLinkBtn');
-            if (notice) notice.classList.add('hidden');
-            if (btn) btn.classList.remove('hidden');
-            const input = document.getElementById('ssoEmailInput');
-            if (input) input.focus();
-        }
-
         async function isEmailRegistered(email) {
-            if (!email || !db || !auth?.currentUser) {
-                // Saat belum login, Firestore Rules hanya mengizinkan email yang sedang login.
-                // Untuk permintaan link pertama, gunakan Firebase Auth email enumeration-safe fallback:
-                // lakukan pengecekan dokumen hanya jika sesi anonim/auth sudah tersedia.
-                return false;
-            }
+            if (!email || !db || !auth?.currentUser) return false;
             try {
                 const normalized = email.toLowerCase().trim();
                 const snap = await db.collection('adminEmails').doc(normalized).get();
@@ -1480,7 +1451,7 @@ Energi : 560.05 kkal
                 auth.signOut();
             }
             state.currentUser = null;
-            showToast('👋 Keluar dari Admin SSO.', 'info');
+            showToast('👋 Keluar dari Admin.', 'info');
             showPublicView();
         }
 
@@ -1493,7 +1464,7 @@ Energi : 560.05 kkal
             state.currentView = 'public';
             document.getElementById('publicView').classList.remove('hidden');
             document.getElementById('adminView').classList.add('hidden');
-            document.getElementById('adminNavBtnText').innerText = '🔑 Admin SSO Login';
+            document.getElementById('adminNavBtnText').innerText = '🔑 Admin Login';
             window.scrollTo({ top: 0, behavior: 'smooth' });
             renderApp();
         }
